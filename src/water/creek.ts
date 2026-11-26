@@ -1,8 +1,9 @@
 /**
  * The creek's water: a ribbon laid along the creek's path with a shader that
- * makes it flow. Ripples drift downstream, shallows show the pebbled bed,
- * foam gathers at the banks and where the water runs fast, and the sun or
- * moon glints off the surface.
+ * makes it flow. The water is clear: the bed shows through in the shallows
+ * and the blue deepens with depth. Gentle ripples drift downstream, the sky
+ * shows in the surface at a glancing angle, light plays over the bed, the
+ * sun or moon glints, and there is only a trace of foam.
  */
 import {
   Fn,
@@ -29,6 +30,10 @@ import type { TerrainData } from '../world/terrainData';
 import { env } from '../render/env';
 import { col, terrainUv } from '../render/terrain';
 import type { WorldTextures } from '../render/textures';
+
+/** Metres a second the surface drifts downstream where the creek is level, and how much more for each unit of slope. */
+const SPEED_IN_POOLS = 0.3;
+const SPEED_ON_SLOPE = 9;
 
 function ribbon(creek: CreekSample[], t: TerrainData): THREE.BufferGeometry {
   const pos: number[] = [];
@@ -88,48 +93,68 @@ export class CreekWater {
       const slope = attribute('aSlope', 'float');
       const dir = attribute('aFlowDir', 'vec2');
       const time = env.time;
-      const speed = slope.mul(16).add(0.55);
+      // How far the surface has drifted downstream (metres): a slow glide in the pools, quicker down the slopes.
+      const drift = time.mul(slope.mul(SPEED_ON_SLOPE).add(SPEED_IN_POOLS));
 
       // Depth of water here, from the baked ground height.
       const ground = texture(tex.height, terrainUv(t, positionWorld.xz)).r;
       const depth = max(positionWorld.y.sub(ground), 0).toVar();
+      const deep = smoothstep(0.02, 0.5, depth);
 
-      // Two layers of ripples drifting downstream at different speeds.
-      const s1 = fuv.mul(vec2(0.42, 0.3)).sub(vec2(0, time.mul(speed).mul(0.3)));
-      const s2 = fuv.mul(vec2(1.25, 0.8)).sub(vec2(0, time.mul(speed).mul(0.82)));
-      const r1 = texture(tex.noise, s1).rg.sub(0.5);
-      const r2 = texture(tex.noise, s2).ba.sub(0.5);
-      const rip = r1.mul(0.9).add(r2.mul(0.6)).mul(slope.mul(26).add(1));
+      // Ripples: a slow broad swell and finer wavelets, both carried downstream, the wavelets
+      // faster and sliding a little sideways so the two never move as one. They only tilt the
+      // surface a few degrees: enough to stir the reflection, not to chop it up.
+      const swell = texture(tex.noise, fuv.mul(vec2(0.17, 0.11)).sub(vec2(0, drift.mul(0.11)))).rg.sub(0.5);
+      const wavelets = texture(tex.noise, fuv.mul(vec2(0.47, 0.3)).add(vec2(time.mul(0.013), drift.mul(-0.36)))).ba.sub(0.5);
+      const rip = swell.mul(0.3).add(wavelets.mul(0.18)).mul(slope.mul(12).add(1));
       // Ripples are in "across/along" space; turn them to face the way the water flows.
       const across = vec2(dir.y.negate(), dir.x);
       const wr = across.mul(rip.x).add(dir.mul(rip.y));
       const nrm = normalize(vec3(wr.x, 1, wr.y)).toVar();
 
       const view = normalize(env.viewPos.sub(positionWorld));
-      const fres = pow(float(1).sub(saturate(dot(view, nrm))), 4).mul(0.92).add(0.04);
+      // Water mirrors little when looked into and almost everything at a glancing angle.
+      const fres = pow(float(1).sub(saturate(dot(view, nrm))), 5).mul(0.98).add(0.02);
       const refl = reflect(view.negate(), nrm);
 
-      // What the surface mirrors: the sky, brighter low down, plus the sun or moon as glitter.
-      const sky = mix(env.skyHorizon, env.skyZenith, pow(saturate(refl.y), 0.55));
-      const glitter = pow(saturate(dot(refl, env.lightDir)), 260).mul(9).add(pow(saturate(dot(refl, env.lightDir)), 24).mul(0.35));
-      const mirror = sky.add(env.lightColor.mul(glitter));
+      // What the surface mirrors: the sky (kept on the blue side of the horizon's haze), and the
+      // sun or moon as a scatter of small glints that come and go as the wavelets pass.
+      const sky = mix(env.skyHorizon, env.skyZenith, pow(saturate(refl.y), 0.5).mul(0.7).add(0.3));
+      const toLight = saturate(dot(refl, env.lightDir));
+      const twinkle = smoothstep(0.5, 0.75, texture(tex.noise, fuv.mul(vec2(2.3, 1.6)).sub(vec2(0, drift.mul(1.5)))).b);
+      const glint = pow(toLight, 700).mul(5).mul(twinkle).add(pow(toLight, 90).mul(0.2)).add(pow(toLight, 14).mul(0.05));
+      const mirror = sky.add(env.lightColor.mul(glint));
 
-      // The water's own colour deepens from clear shallows to teal.
-      const lit = env.ambientSky.mul(0.75).add(env.lightColor.mul(saturate(dot(nrm, env.lightDir)).mul(0.55)));
-      const body = mix(col('#74b8a6'), col('#1d5a63'), smoothstep(0.04, 0.5, depth)).mul(lit);
+      // The water's own colour: a clear aqua at the banks, through a bright blue, to a deep blue
+      // in the middle of the channel. Long faint bands of lighter and darker water slide
+      // downstream, which is most of what shows the stream is moving when it is looked down into.
+      const bands = texture(tex.noise, fuv.mul(vec2(0.62, 0.075)).sub(vec2(0, drift.mul(0.075)))).a;
+      const lit = env.ambientSky.mul(0.7).add(env.lightColor.mul(0.42)).mul(bands.mul(0.3).add(0.85));
+      const tint = mix(mix(col('#8fdadc'), col('#3f9fd6'), smoothstep(0.0, 0.26, depth)), col('#1c66ad'), smoothstep(0.2, 0.56, depth));
+      const body = tint.mul(lit);
+      // How much the water hides the bed under it: hardly at all at the edge, almost wholly mid-stream.
+      const veil = smoothstep(0.0, 0.05, depth).mul(mix(float(0.14), float(0.9), deep));
 
-      // Foam: along the banks, and in streaks where the bed is steep.
-      const churn = texture(tex.noise, fuv.mul(vec2(0.9, 0.35)).sub(vec2(0, time.mul(speed).mul(0.5)))).a;
-      const bankFoam = float(1).sub(smoothstep(0.02, 0.13, depth)).mul(smoothstep(0.38, 0.62, churn.add(r2.x.mul(0.6))));
-      const riffle = smoothstep(0.012, 0.045, slope).mul(smoothstep(0.52, 0.74, churn.add(r1.y.mul(0.8))));
-      const foam = saturate(bankFoam.mul(0.85).add(riffle));
-      const foamCol = vec3(0.92, 0.96, 0.98).mul(lit.mul(1.25).add(0.05));
+      // Light gathered by the ripples plays over the bed in the shallows: a soft bright net that drifts and shifts.
+      const net1 = texture(tex.noise, fuv.mul(vec2(0.5, 0.38)).sub(vec2(time.mul(0.02), drift.mul(0.36)))).g;
+      const net2 = texture(tex.noise, fuv.mul(vec2(0.56, 0.34)).add(vec2(time.mul(0.03), drift.mul(-0.48))).add(0.37)).g;
+      const net = pow(float(1).sub(saturate(net1.sub(net2).abs().mul(3.2))), 2.2);
+      const shallows = float(1).sub(smoothstep(0.1, 0.5, depth)).mul(smoothstep(0.0, 0.07, depth));
+      const caustics = vec3(0.6, 0.9, 1).mul(env.lightColor).mul(net.mul(shallows).mul(0.05));
 
-      const surface = mix(body, mirror, fres).toVar();
-      surface.assign(mix(surface, foamCol, foam));
+      // A little foam: a thin broken line of it along the banks, and faint streaks where the bed is steep.
+      const lace = texture(tex.noise, fuv.mul(vec2(0.8, 0.5)).sub(vec2(0, drift.mul(0.3)))).a;
+      const edge = float(1).sub(smoothstep(0.0, 0.035, depth)).mul(smoothstep(0.5, 0.72, lace)).mul(0.3);
+      const streaks = texture(tex.noise, fuv.mul(vec2(1.3, 0.16)).sub(vec2(0, drift.mul(0.3)))).r;
+      const riffle = smoothstep(0.035, 0.075, slope).mul(smoothstep(0.6, 0.8, streaks.add(wavelets.x.mul(0.5)))).mul(0.35);
+      const foam = saturate(edge.add(riffle));
+      const foamCol = vec3(0.93, 0.97, 1).mul(lit);
 
-      // Clear at the very edge, more solid with depth and at glancing angles.
-      const alpha = smoothstep(0.0, 0.1, depth).mul(mix(float(0.62), float(0.96), saturate(fres.mul(1.4).add(smoothstep(0.1, 0.6, depth).mul(0.5))))).max(foam.mul(0.9));
+      // Seen through the surface: the water's colour over the bed, with the play of light on top
+      // (divided by the veil so it shows at full strength however clear the water is there).
+      const through = body.add(caustics.div(veil.max(0.2)));
+      const surface = mix(mix(through, mirror, fres), foamCol, foam);
+      const alpha = mix(veil, float(1), fres).mul(smoothstep(0.0, 0.03, depth)).max(foam.mul(0.8));
       return vec4(surface, alpha);
     })();
 
