@@ -17,6 +17,8 @@ import { Character } from './character';
 const TURN_RADIUS = 5.5;
 /** Within this distance their head follows the player. */
 const LOOK_RADIUS = 9;
+/** How far in front of a seat's middle a villager stands to sit squarely on it, metres. */
+const SEAT_OFFSET = 0.27;
 
 export class Npc {
   readonly figure: Character;
@@ -29,6 +31,8 @@ export class Npc {
   lineIndex = 0;
   /** True while the player is in conversation with them. */
   talking = false;
+  /** True when they are sat down (at home in the evening, where there is a seat). */
+  sitting = false;
   private collider: ReturnType<Physics['addStaticCylinder']> | null = null;
   private readonly height: number;
   private readonly idle: string;
@@ -74,6 +78,11 @@ export class Npc {
   /** Choose what to be doing: talking, getting on with the day's work, or standing about. */
   private animate(dt: number, near: boolean): void {
     const work = this.def.work;
+    if (this.sitting) {
+      this.working = false;
+      this.figure.play(this.talking ? 'Sitting_Talking_Loop' : 'Sitting_Idle_Loop', 0.35);
+      return;
+    }
     if (this.talking) {
       this.working = false;
       this.figure.play('Idle_Talking_Loop', 0.35);
@@ -114,7 +123,8 @@ export class Npc {
     const dist = Math.hypot(dx, dz);
     const sameFloor = Math.abs(player.y - this.position.y) < 2;
     const near = dist < TURN_RADIUS && sameFloor;
-    const want = near ? Math.atan2(dx, -dz) : this.restYaw;
+    // Seated, they stay as they are and only turn their head.
+    const want = near && !this.sitting ? Math.atan2(dx, -dz) : this.restYaw;
     let diff = want - this.yaw;
     while (diff > Math.PI) diff -= Math.PI * 2;
     while (diff < -Math.PI) diff += Math.PI * 2;
@@ -134,6 +144,8 @@ export class Npcs {
   private readonly proj = new THREE.Matrix4();
   private readonly sphere = new THREE.Sphere(new THREE.Vector3(), 1.3);
   private readonly eye = new THREE.Vector3();
+  /** Which villager has which seat, so two do not sit on one stool. */
+  private readonly seats = new Map<string, string>();
 
   constructor(
     scene: THREE.Scene,
@@ -154,11 +166,57 @@ export class Npcs {
     return this.all.find((n) => n.def.id === id);
   }
 
+  /**
+   * A free seat near a villager's evening spot: where to put them so they sit on it, and the way they
+   * face (toward the table if one is beside it). Building-local; null if there is nothing to sit on.
+   */
+  private seatFor(npc: Npc): { x: number; z: number; yaw: number } | null {
+    const def = npc.def;
+    const home = BUILDING_BY_ID[def.home]!;
+    let best: { x: number; z: number } | null = null;
+    let bestD = 2.5;
+    for (const f of home.furniture) {
+      if ((f.type !== 'stool' && f.type !== 'bench') || (f.storey ?? 0) !== 0) continue;
+      const key = `${home.id}:${f.x},${f.z}`;
+      const takenBy = this.seats.get(key);
+      if (takenBy && takenBy !== def.id) continue;
+      const d = Math.hypot(f.x - def.night.x, f.z - def.night.z);
+      if (d < bestD) {
+        bestD = d;
+        best = f;
+      }
+    }
+    if (!best) return null;
+    this.seats.set(`${home.id}:${best.x},${best.z}`, def.id);
+    // Face the nearest table within reach; otherwise keep the heading they were given.
+    let dx = 0;
+    let dz = 0;
+    let tableD = 1.9;
+    for (const f of home.furniture) {
+      if (f.type !== 'table' && f.type !== 'counter') continue;
+      const d = Math.hypot(f.x - best.x, f.z - best.z);
+      if (d < tableD) {
+        tableD = d;
+        dx = (f.x - best.x) / d;
+        dz = (f.z - best.z) / d;
+      }
+    }
+    if (dx === 0 && dz === 0) {
+      const h = (def.night.yaw * Math.PI) / 180;
+      dx = -Math.sin(h);
+      dz = Math.cos(h);
+    }
+    // A sitter's hips are a little behind where they stand, so they stand in front of the seat to sit on it.
+    return { x: best.x + dx * SEAT_OFFSET, z: best.z + dz * SEAT_OFFSET, yaw: (Math.atan2(-dx, dz) * 180) / Math.PI };
+  }
+
   /** Move a villager to where they belong for the time of day. */
   private station(npc: Npc, night: boolean): void {
     const def = npc.def;
     const home = BUILDING_BY_ID[def.home]!;
-    const indoors = night ? def.night : def.dayIndoors;
+    const seat = night ? this.seatFor(npc) : null;
+    const indoors = seat ?? (night ? def.night : def.dayIndoors);
+    npc.sitting = seat !== null;
     let x: number;
     let z: number;
     let yaw: number;

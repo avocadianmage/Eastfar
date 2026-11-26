@@ -173,6 +173,10 @@ test('villagers go indoors at night', async ({ page }) => {
   // Step away so nobody sees them move, then let night fall.
   await api(page, 'api.teleport(300, 30, 90, 0); api.setTime(22);');
   await page.waitForFunction(() => (window as unknown as W).__eastfar.npc('elder')?.night === true, null, { timeout: 60_000 });
+  // She has a stool by her table and sits on it; the blacksmith, who has none, stands.
+  const seated = await api<{ sitting: boolean; clip: string }>(page, 'return api.npc("elder");');
+  expect(seated.sitting).toBe(true);
+  await page.waitForFunction(() => (window as unknown as { __eastfar: { npc(id: string): { sitting: boolean } } }).__eastfar.npc('blacksmith').sitting === false, null, { timeout: 30_000 });
   const night = await api<{ x: number; z: number }>(page, 'return api.npc("elder");');
   // Inside the elder's house, at (-31, -5).
   expect(Math.hypot(night.x + 31, night.z + 5)).toBeLessThan(5);

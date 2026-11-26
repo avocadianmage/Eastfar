@@ -479,7 +479,7 @@ export class Game {
       save: () => this.gameplay.toSave(),
       npc: (id: string) => {
         const n = this.npcs?.byId(id);
-        return n ? { x: n.position.x, y: n.position.y, z: n.position.z, night: n.atNight, clip: n.figure.clip, time: n.figure.time, lod: n.figure.levelOfDetail, triangles: n.figure.triangles } : null;
+        return n ? { x: n.position.x, y: n.position.y, z: n.position.z, night: n.atNight, sitting: n.sitting, clip: n.figure.clip, time: n.figure.time, lod: n.figure.levelOfDetail, triangles: n.figure.triangles } : null;
       },
       swarms: () => (this.bees?.swarms ?? []).map((b) => ({ x: b.position.x, y: b.position.y, z: b.position.z, alive: b.alive, health: b.health, state: b.state })),
       caps: () => (this.caps?.spots ?? []).map((c, i) => ({ x: c.x, z: c.z, available: this.caps!.available(i, this.clock.day) })),
