@@ -7,7 +7,7 @@ import * as THREE from 'three/webgpu';
 import type { Input } from '../core/input';
 import { playableSdf } from '../world/layout';
 import { PLAYER_EYE, type Physics } from '../world/physics';
-import { heightAt, waterDepthAt, type TerrainData } from '../world/terrainData';
+import { heightAt, normalAt, waterDepthAt, type TerrainData } from '../world/terrainData';
 
 const WALK_SPEED = 4.4;
 const SPRINT_SPEED = 7.4;
@@ -21,6 +21,10 @@ const MAX_PITCH = (88 * Math.PI) / 180;
 const BOUNDARY_LIMIT = 26;
 const BOUNDARY_SOFT = 10;
 const BASE_FOV = 72;
+/** Slower than this (m/s) with no keys held, the player counts as having stopped. */
+const REST_SPEED = 0.08;
+/** Ground steeper than about 45 degrees is too steep to stand on: the player slides. (Cosine of the angle.) */
+const STEEP_SLOPE_COS = 0.7;
 
 export class Player {
   /** Position of the feet. */
@@ -52,6 +56,7 @@ export class Player {
   private airTime = 0;
   private readonly mouse = { x: 0, y: 0 };
   private readonly moved = { x: 0, y: 0, z: 0 };
+  private readonly normal = { x: 0, y: 1, z: 0 };
 
   constructor(
     private readonly physics: Physics,
@@ -156,22 +161,32 @@ export class Player {
 
     // --- Move with collision ---
     const wasGrounded = this.grounded;
-    const fallSpeed = -this.velocity.y;
-    const px = this.feet.x;
-    const pz = this.feet.z;
-    const dy = this.velocity.y * dt;
-    this.grounded = this.physics.movePlayer(this.velocity.x * dt, dy, this.velocity.z * dt, this.moved);
-    const movedY = this.moved.y - this.feet.y;
-    this.feet.set(this.moved.x, this.moved.y, this.moved.z);
+    // Standing still on the ground, nothing moves the player, so they are not moved at all.
+    // (Pressing them down onto a slope each frame lets the collision code slide them slowly
+    // downhill.) Only on very steep ground are they left to slide.
+    const atRest =
+      wasGrounded && wl < 1e-6 && this.velocity.y <= 0 && Math.hypot(this.velocity.x, this.velocity.z) < REST_SPEED && normalAt(this.terrain, this.feet.x, this.feet.z, this.normal).y > STEEP_SLOPE_COS;
+    if (atRest) {
+      this.velocity.set(0, -2, 0);
+      this.speed = 0;
+    } else {
+      const fallSpeed = -this.velocity.y;
+      const px = this.feet.x;
+      const pz = this.feet.z;
+      const dy = this.velocity.y * dt;
+      this.grounded = this.physics.movePlayer(this.velocity.x * dt, dy, this.velocity.z * dt, this.moved);
+      const movedY = this.moved.y - this.feet.y;
+      this.feet.set(this.moved.x, this.moved.y, this.moved.z);
 
-    if (this.grounded && this.velocity.y < 0) {
-      if (!wasGrounded && fallSpeed > 4) this.onLand(Math.min(1, fallSpeed / 14));
-      this.velocity.y = -2; // keep a little downward push so slopes stay "grounded"
-    } else if (this.velocity.y > 0 && movedY < dy * 0.5) {
-      this.velocity.y = 0; // bumped head
+      if (this.grounded && this.velocity.y < 0) {
+        if (!wasGrounded && fallSpeed > 4) this.onLand(Math.min(1, fallSpeed / 14));
+        this.velocity.y = -2; // keep a little downward push so slopes stay "grounded"
+      } else if (this.velocity.y > 0 && movedY < dy * 0.5) {
+        this.velocity.y = 0; // bumped head
+      }
+
+      this.speed = dt > 0 ? Math.hypot(this.feet.x - px, this.feet.z - pz) / dt : 0;
     }
-
-    this.speed = dt > 0 ? Math.hypot(this.feet.x - px, this.feet.z - pz) / dt : 0;
 
     // --- Camera: smooth out steps and small bumps, add a gentle stride bob ---
     const eyeTarget = this.feet.y + PLAYER_EYE;

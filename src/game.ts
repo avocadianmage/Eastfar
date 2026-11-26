@@ -41,10 +41,10 @@ import { Sky } from './render/sky';
 import { TerrainMesh } from './render/terrain';
 import { createWorldTextures, type WorldTextures } from './render/textures';
 import { CreekWater } from './water/creek';
-import { COBBLED_WITHIN, REGION_LABELS, VILLAGE, regionAt, type RegionName } from './world/layout';
+import { COBBLED_WITHIN, REGION_LABELS, VILLAGE, playableSdf, regionAt, type RegionName } from './world/layout';
 import { Physics } from './world/physics';
 import { buildingAt } from './world/buildings';
-import { MASK2_FOREST, MASK2_PATH, MASK_GRASS, bakeTerrain, creekDistanceAt, heightAt, mask2At, maskAt, type TerrainData } from './world/terrainData';
+import { MASK2_FOREST, MASK2_PATH, MASK_GRASS, bakeTerrain, creekDistanceAt, heightAt, mask2At, maskAt, normalAt, waterDepthAt, type TerrainData } from './world/terrainData';
 
 export interface GameState {
   x: number;
@@ -447,6 +447,11 @@ export class Game {
         this.playing = playing;
       },
       groundAt: (x: number, z: number) => heightAt(this.terrain, x, z),
+      /** How steep the ground is at a point, in degrees, and whether it is under water or outside the walkable land. */
+      slopeAt: (x: number, z: number) => {
+        const n = normalAt(this.terrain, x, z, { x: 0, y: 1, z: 0 });
+        return { degrees: (Math.acos(Math.min(1, n.y / Math.hypot(n.x, n.y, n.z))) * 180) / Math.PI, water: waterDepthAt(this.terrain, x, z) > 0, outside: playableSdf(x, z) > 0 };
+      },
       /** The closest tree to a point: for tests and for framing screenshots. */
       nearestTree: (x: number, z: number, kind?: number) => {
         const s = this.trees?.set;

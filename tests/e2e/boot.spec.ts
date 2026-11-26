@@ -58,6 +58,45 @@ test('walks forward over the ground and stays on it', async ({ page }) => {
   expect(Math.abs(after.y - ground)).toBeLessThan(0.3);
 });
 
+test('standing still on a slope, the player stays exactly where they are', async ({ page }) => {
+  test.setTimeout(480_000);
+  await page.setViewportSize({ width: 320, height: 180 });
+  await boot(page, 'freeze=1&time=10:00&skip=flowers,grass');
+  // Find sloping, dry ground in the meadow.
+  const spot = await page.evaluate(() => {
+    const api = (window as unknown as { __eastfar: { slopeAt(x: number, z: number): { degrees: number; water: boolean; outside: boolean } } }).__eastfar;
+    let best: { x: number; z: number; degrees: number } | null = null;
+    for (let x = -80; x <= 160; x += 5) {
+      for (let z = -440; z <= -220; z += 5) {
+        const s = api.slopeAt(x, z);
+        if (s.water || s.outside || s.degrees > 24) continue;
+        if (!best || s.degrees > best.degrees) best = { x, z, degrees: s.degrees };
+      }
+    }
+    return best;
+  });
+  expect(spot).not.toBeNull();
+  expect(spot!.degrees).toBeGreaterThan(10);
+  await page.evaluate(([x, z]) => (window as unknown as W).__eastfar.teleport(x!, z!, 0), [spot!.x, spot!.z]);
+  // Let them land and settle, then watch for a good while.
+  let from = (await state(page)).frames;
+  await page.waitForFunction((f) => (window as unknown as W).__eastfar.state().frames >= f + 20, from, { timeout: 120_000 });
+  const before = await state(page);
+  from = before.frames;
+  await page.waitForFunction((f) => (window as unknown as W).__eastfar.state().frames >= f + 90, from, { timeout: 300_000 });
+  const after = await state(page);
+  expect(Math.hypot(after.x - before.x, after.z - before.z)).toBeLessThan(0.001);
+  expect(Math.abs(after.y - before.y)).toBeLessThan(0.001);
+
+  // They can still walk off, uphill or down.
+  await page.evaluate(() => (window as unknown as W).__eastfar.hold('forward', true));
+  await page.waitForFunction(([x, z]) => {
+    const s = (window as unknown as W).__eastfar.state();
+    return Math.hypot(s.x - x!, s.z - z!) > 3;
+  }, [after.x, after.z], { timeout: 120_000 });
+  await page.evaluate(() => (window as unknown as W).__eastfar.hold('forward', false));
+});
+
 test('time passes at four game seconds per real second, and freezes on request', async ({ page }) => {
   await boot(page, 'time=12:00');
   const a = await state(page);
@@ -89,6 +128,8 @@ test('stays inside the draw-call and triangle budget at high quality', async ({ 
     ['creek bank', 96, -352, 255],
     ['village green', -6, 8, 80],
     ['forest edge', -150, -330, 300],
+    // The spot on walkable ground with the most trees close by.
+    ['deep in the wood', -124, -452, 270],
   ];
   for (const [name, x, z, yaw] of views) {
     await page.evaluate(([px, pz, pyaw]) => (window as unknown as W).__eastfar.teleport(px!, pz!, pyaw), [x, z, yaw]);
