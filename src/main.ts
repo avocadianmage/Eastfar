@@ -94,6 +94,27 @@ async function boot(): Promise<void> {
     }
   };
 
+  // Settings: shown on the title and pause screens.
+  const settingsBox = document.getElementById('settings') as HTMLElement;
+  const quality = document.getElementById('set-quality') as HTMLSelectElement;
+  const volume = document.getElementById('set-volume') as HTMLInputElement;
+  const sensitivity = document.getElementById('set-sensitivity') as HTMLInputElement;
+  const note = document.getElementById('set-note') as HTMLElement;
+  settingsBox.hidden = false;
+  quality.value = game.settings.quality;
+  volume.value = String(game.settings.volume);
+  sensitivity.value = String(game.settings.sensitivity);
+  quality.addEventListener('change', () => {
+    game.applySettings({ quality: quality.value as typeof game.settings.quality });
+    note.hidden = quality.value === game.quality.name;
+  });
+  volume.addEventListener('input', () => game.applySettings({ volume: Number(volume.value) }));
+  sensitivity.addEventListener('input', () => game.applySettings({ sensitivity: Number(sensitivity.value) }));
+  (document.getElementById('set-reload') as HTMLButtonElement).addEventListener('click', () => {
+    game.gameplay.saveNow();
+    location.reload();
+  });
+
   if (game.resumed) {
     // Offer a fresh start to anyone with a saved game.
     const fresh = document.createElement('button');

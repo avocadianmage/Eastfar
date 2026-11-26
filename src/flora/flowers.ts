@@ -16,6 +16,7 @@ import {
   mix,
   mod,
   positionGeometry,
+  positionWorld,
   sin,
   smoothstep,
   texture,
@@ -31,7 +32,7 @@ import {
 import * as THREE from 'three/webgpu';
 import { mulberry32 } from '../core/rng';
 import type { TerrainData } from '../world/terrainData';
-import { env } from '../render/env';
+import { env, lanternLight } from '../render/env';
 import type { Quality } from '../render/quality';
 import { col, terrainUv } from '../render/terrain';
 import type { WorldTextures } from '../render/textures';
@@ -180,6 +181,7 @@ export class Flowers {
     // Head: petals take the drift colour, the centre is golden. Stem: plain green, fully opaque.
     const headCol = vColor.mul(ftex.r).add(centreCol.mul(ftex.g)).mul(1.15);
     mat.colorNode = mix(vColor, headCol, vHead);
+    mat.emissiveNode = mix(vColor, headCol, vHead).mul(lanternLight(positionWorld));
     mat.opacityNode = mix(float(1), ftex.r.add(ftex.g), vHead);
     mat.alphaTest = 0.5;
     mat.alphaToCoverage = true;

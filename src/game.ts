@@ -7,7 +7,11 @@ import { Village } from './buildings/village';
 import { GameClock } from './core/clock';
 import { Input, type Action } from './core/input';
 import { SaveStore } from './core/save';
+import { loadSettings, saveSettings, type Settings } from './core/settings';
 import { BeeSwarms } from './entities/bees';
+import { Crows } from './entities/crows';
+import { createGate, type Gate } from './entities/gate';
+import { Scarecrows } from './entities/scarecrows';
 import { MoonCaps } from './entities/mushrooms';
 import { Npcs } from './entities/npc';
 import { createStatue } from './entities/statue';
@@ -26,7 +30,7 @@ import { env } from './render/env';
 import { DynamicResolution } from './render/dynamicResolution';
 import { PerfHud } from './render/perfHud';
 import { Post } from './render/post';
-import { QUALITY, loadQualityName, type Quality } from './render/quality';
+import { QUALITY, type Quality } from './render/quality';
 import { createRenderer, type RenderContext } from './render/renderer';
 import { Sky } from './render/sky';
 import { TerrainMesh } from './render/terrain';
@@ -62,6 +66,8 @@ export class Game {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(72, 1, 0.1, 4000);
   readonly quality: Quality;
+  /** The player's saved preferences. */
+  readonly settings: Settings;
   readonly input: Input;
   readonly hud: PerfHud;
   readonly audio = new Ambience();
@@ -82,6 +88,9 @@ export class Game {
   npcs?: Npcs;
   bees?: BeeSwarms;
   caps?: MoonCaps;
+  scarecrows?: Scarecrows;
+  crows?: Crows;
+  gate?: Gate;
   butterflies?: Butterflies;
   viewmodel?: Viewmodel;
   gameplay!: Gameplay;
@@ -103,7 +112,9 @@ export class Game {
     private readonly ui: HTMLElement,
     readonly params: DebugParams,
   ) {
-    this.quality = QUALITY[loadQualityName(params.quality)];
+    this.settings = loadSettings();
+    this.quality = QUALITY[params.quality ?? this.settings.quality];
+    this.audio.volume = this.settings.volume;
     this.input = new Input(canvas);
     this.hud = new PerfHud(ui);
     if (params.hud) this.hud.toggle(true);
@@ -138,6 +149,7 @@ export class Game {
     if (!skip.has('village')) this.village = new Village(this.scene, this.terrain, this.textures, this.physics);
     this.player = new Player(this.physics, this.terrain);
     this.player.fly = this.params.fly;
+    this.player.sensitivity = this.settings.sensitivity;
     this.player.onFootstep = (strength) => this.audio.step(this.player.wading > 0.06 ? 'water' : 'grass', strength);
     this.player.onLand = (impact) => this.audio.step(this.player.wading > 0.06 ? 'water' : 'land', impact);
 
@@ -150,6 +162,11 @@ export class Game {
         this.bees = new BeeSwarms(this.scene, built, this.terrain);
         content.push('bees');
       }
+      if (!skip.has('scarecrows')) {
+        this.scarecrows = new Scarecrows(this.scene, built, this.terrain, this.physics);
+        content.push('scarecrows');
+      }
+      this.gate = createGate(this.scene, built, this.terrain, this.physics);
       // The camera joins the scene so the arm and weapon attached to it are drawn.
       this.scene.add(this.camera);
       if (!skip.has('viewmodel')) this.viewmodel = new Viewmodel(this.camera);
@@ -159,6 +176,10 @@ export class Game {
       content.push('mushrooms');
     }
     if (!skip.has('butterflies')) this.butterflies = new Butterflies(this.scene, this.terrain, this.textures);
+    if (!skip.has('crows')) {
+      this.crows = new Crows(this.scene, this.terrain);
+      content.push('crows');
+    }
 
     const p = this.params;
     this.gameplay = new Gameplay({
@@ -171,6 +192,9 @@ export class Game {
       npcs: this.npcs,
       bees: this.bees,
       caps: this.caps,
+      scarecrows: this.scarecrows,
+      crows: this.crows,
+      gate: this.gate,
       audio: this.audio,
       save: SaveStore.browser(p.nosave),
       // Parts of the world that exist so far; quests needing others are not yet offered.
@@ -316,6 +340,14 @@ export class Game {
     this.camera.updateProjectionMatrix();
   }
 
+  /** Change a preference and remember it. Graphics quality takes effect when the page reloads. */
+  applySettings(change: Partial<Settings>): void {
+    Object.assign(this.settings, change);
+    this.audio.volume = this.settings.volume;
+    this.player.sensitivity = this.settings.sensitivity;
+    saveSettings(this.settings);
+  }
+
   /** Overridable hook: the pack screen closed and the mouse should be captured again. */
   onRecapture: () => void = () => this.input.requestLock();
 
@@ -400,6 +432,8 @@ export class Game {
       swarms: () => (this.bees?.swarms ?? []).map((b) => ({ x: b.position.x, y: b.position.y, z: b.position.z, alive: b.alive, health: b.health, state: b.state })),
       caps: () => (this.caps?.spots ?? []).map((c, i) => ({ x: c.x, z: c.z, available: this.caps!.available(i, this.clock.day) })),
       hurt: (amount: number) => this.gameplay.hurt(amount),
+      scarecrows: () => (this.scarecrows?.all ?? []).map((s) => ({ id: s.def.id, x: s.feet.x, z: s.feet.z, state: s.state, health: s.health, walks: s.def.walks })),
+      crows: () => (this.crows?.all ?? []).map((c) => ({ x: c.position.x, y: c.position.y, z: c.position.z, state: c.state })),
       /** Open or close every door (for screenshots and tests). */
       setDoors: (open: boolean) => {
         for (const d of this.village?.doors ?? []) if (d.open !== open) this.village!.toggleDoor(d);

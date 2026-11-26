@@ -8,7 +8,7 @@
 | 1 | A walk in the meadow | Built; awaiting sign-off on look and frame time on a real GPU |
 | 2 | The Quiet Village | Built: roads, bridge, eight enterable buildings, six villagers with day/night routines, dialogue, quests, pack and journal, resting, saving. One quest (The Old Legend) is playable start to finish; the others are offered as their content arrives in milestones 3 and 4 |
 | 3 | Meadow content | Built: combat with a first-person arm and weapons, five bee swarms, Moonlight Caps that glow at night, butterflies, fainting, and trading with the blacksmith and innkeeper. The elder's, beekeeper's and herbalist's quests are playable start to finish |
-| 4 | The Farms | Not started |
+| 4 | The Farms | Built: eight crop fields (wheat and rows of greens), two farmhouses and three barns (all enterable), ten scarecrows of which five walk at night, twelve crows, the farmers Dorrin and Marta Haywell, and the chained gate in a boundary wall at the forest's edge. Both farm quests are playable |
 | 5 | Polish and ship | Not started |
 
 Decisions made while building milestones 0 and 1:
@@ -38,6 +38,15 @@ Decisions made while building milestone 3:
 - **Moonlight Caps:** 28 clusters along the creek banks and under meadow trees. Subtle by day; they glow strongly at night. A picked cluster grows back two days later.
 - **Trading** runs through the dialogue box: Bram sells the sword (60), lantern (25) and cloak (30); Hesta sells bread and apples and pays 6 for honeycomb.
 - **Wildlife so far:** butterflies by day, fireflies by night. Songbirds and fish are left for milestone 5.
+
+Decisions made while building milestone 4:
+
+- **Fields** are rectangles in `src/world/fields.ts`. Wheat is drawn by the grass system (taller, golden); greens are low plants in east-west rows over tilled earth. Prairie grass fills the land between.
+- **Farmsteads:** Haywell Farm (farmhouse and barn) north of the road at about x 430–470; Eastfield Farm (farmhouse and barn) south of the road at about x 600–635; a lone roadside barn at x 322. Barns have wide doors and hold hay, stalls and troughs.
+- **Scarecrows:** ten, one or two per field. The five in the eastern fields walk at night: they notice the player at 24 m, shamble at 2.1 m/s (slower than walking), strike for 2 after a half-second wind-up, and take 8 damage to put down. One put down stays down until the next night. By day, and whenever nobody is watching, they are back on their posts.
+- **Crows:** four flocks of three wheel above the wheat by day and are gone at night. One or two at a time dive at a player within about 34 m, peck for 1 and climb away; they can be hit while diving or climbing. A struck crow is back the next day.
+- **The eastern edge:** a drystone wall runs north-south at x ≈ 853 across the whole width of the farmland, with a chained timber gate where the East Road meets it. Dark conifer forest stands beyond. Looking at the gate gives a short narration; it does not open in this version.
+- **Quest order:** Dorrin offers "A Murder of Crows"; Marta offers "What Walks at Night" only after that is finished.
 
 ## Context
 

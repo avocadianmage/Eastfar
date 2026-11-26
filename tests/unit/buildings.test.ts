@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { BRIDGE, BUILDINGS, PATHS, WALL_THICKNESS, buildingAt, doorstep, footprintSdf, toLocal, toWorld, type WallName } from '../../src/world/buildings';
 import { STAIR_STEPS, buildingBoxes, storeyFloor, wallFrame, wallTop, type Box } from '../../src/world/buildingLayout';
-import { SPAWN } from '../../src/world/layout';
+import { CROW_ROOSTS, FIELDS, SCARECROWS, fieldAt, fieldSdf } from '../../src/world/fields';
+import { SPAWN, farmsSdf } from '../../src/world/layout';
 
 function inside(b: Box, x: number, y: number, z: number, pad = 0): boolean {
   return Math.abs(x - b.x) <= b.hx + pad && Math.abs(y - b.y) <= b.hy + pad && Math.abs(z - b.z) <= b.hz + pad;
@@ -124,7 +125,7 @@ describe('buildings', () => {
 
   it('have a bed in every home and a doorstep outside the footprint', () => {
     for (const b of BUILDINGS) {
-      expect(b.furniture.some((f) => f.type === 'bed'), `${b.id} bed`).toBe(true);
+      if (!b.id.includes('barn')) expect(b.furniture.some((f) => f.type === 'bed'), `${b.id} bed`).toBe(true);
       const d = doorstep(b);
       for (const other of BUILDINGS) expect(footprintSdf(other, d.x, d.z)).toBeGreaterThan(0.5);
     }
@@ -144,5 +145,50 @@ describe('roads', () => {
         }
       }
     }
+  });
+});
+
+describe('the Farms', () => {
+  it('keep every field inside the farmland, clear of buildings, roads and each other', () => {
+    for (const f of FIELDS) {
+      for (const [x, z] of [
+        [f.minX, f.minZ],
+        [f.maxX, f.minZ],
+        [f.minX, f.maxZ],
+        [f.maxX, f.maxZ],
+      ] as const) {
+        expect(farmsSdf(x, z), `${f.id} corner`).toBeLessThan(-10);
+      }
+      for (const b of BUILDINGS) {
+        for (const sx of [-1, 1]) {
+          for (const sz of [-1, 1]) {
+            const c = toWorld(b, (sx * b.width) / 2, (sz * b.depth) / 2);
+            expect(fieldSdf(f, c.x, c.z), `${b.id} in ${f.id}`).toBeGreaterThan(4);
+          }
+        }
+      }
+      for (const g of FIELDS) {
+        if (f === g) continue;
+        const apart = f.maxX < g.minX - 8 || g.maxX < f.minX - 8 || f.maxZ < g.minZ - 8 || g.maxZ < f.minZ - 8;
+        expect(apart, `${f.id} and ${g.id}`).toBe(true);
+      }
+    }
+    for (const p of PATHS) {
+      for (let i = 0; i < p.points.length - 1; i++) {
+        const a = p.points[i]!;
+        const c = p.points[i + 1]!;
+        for (let t = 0; t <= 1; t += 0.02) {
+          const x = a[0] + (c[0] - a[0]) * t;
+          const z = a[1] + (c[1] - a[1]) * t;
+          expect(fieldAt(x, z), `${p.id} crosses a field at ${x.toFixed(0)},${z.toFixed(0)}`).toBeNull();
+        }
+      }
+    }
+  });
+
+  it('stand every scarecrow in a field and gather crows over wheat', () => {
+    expect(SCARECROWS.filter((s) => s.walks).length).toBeGreaterThanOrEqual(3);
+    for (const s of SCARECROWS) expect(fieldAt(s.x, s.z), s.id).not.toBeNull();
+    for (const [x, z] of CROW_ROOSTS) expect(fieldAt(x, z)?.crop).toBe('wheat');
   });
 });

@@ -93,24 +93,3 @@ export const QUALITY: Record<QualityName, Quality> = {
     fireflies: 800,
   },
 };
-
-const STORAGE_KEY = 'eastfar.quality';
-
-export function loadQualityName(override?: QualityName): QualityName {
-  if (override) return override;
-  try {
-    const v = localStorage.getItem(STORAGE_KEY) as QualityName | null;
-    if (v && v in QUALITY) return v;
-  } catch {
-    /* storage unavailable */
-  }
-  return 'high';
-}
-
-export function saveQualityName(name: QualityName): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, name);
-  } catch {
-    /* storage unavailable */
-  }
-}

@@ -15,9 +15,13 @@ import type { NpcDef } from '../data/npcs';
 import { PLACES } from '../data/places';
 import type { QuestDef } from '../data/quests';
 import type { BeeSwarms } from '../entities/bees';
+import type { Crows } from '../entities/crows';
+import type { Gate } from '../entities/gate';
+import type { Scarecrows } from '../entities/scarecrows';
 import type { MoonCaps } from '../entities/mushrooms';
 import type { Npc, Npcs } from '../entities/npc';
 import type { Player } from '../entities/player';
+import { env } from '../render/env';
 import { Hud } from '../ui/hud';
 import { InventoryScreen } from '../ui/inventoryScreen';
 import { BUILDINGS, BUILDING_BY_ID, FLOOR_RISE, toWorld } from '../world/buildings';
@@ -65,6 +69,9 @@ export interface GameplayDeps {
   npcs: Npcs | undefined;
   bees: BeeSwarms | undefined;
   caps: MoonCaps | undefined;
+  scarecrows: Scarecrows | undefined;
+  crows: Crows | undefined;
+  gate: Gate | undefined;
   audio: Ambience;
   save: SaveStore;
   /** Parts of the world that exist in this build; gates which quests are offered. */
@@ -132,6 +139,26 @@ export class Gameplay {
         this.hud.toast('The swarm scatters.');
         this.quests.notify({ type: 'kill', target: 'bee_swarm' });
         if (Math.random() < 0.6) this.give('honeycomb');
+      };
+    }
+
+    if (d.scarecrows) {
+      this.targets.push(...d.scarecrows.targets);
+      d.scarecrows.onWake = () => d.audio.sfx('creak');
+      d.scarecrows.onStrike = (_s, damage) => this.hurt(damage);
+      d.scarecrows.onKilled = () => {
+        this.hud.toast('It folds up. Straw and sticks again.');
+        this.quests.notify({ type: 'kill', target: 'scarecrow' });
+        this.give('straw');
+      };
+    }
+    if (d.crows) {
+      this.targets.push(...d.crows.targets);
+      d.crows.onDive = () => d.audio.sfx('caw');
+      d.crows.onPeck = () => this.hurt(1);
+      d.crows.onKilled = () => {
+        this.quests.notify({ type: 'kill', target: 'crow' });
+        if (Math.random() < 0.5) this.give('crow_feather');
       };
     }
 
@@ -501,6 +528,9 @@ export class Gameplay {
       if (!OWN_BEDS.has(bed.id)) continue;
       consider(bed.pos, REACH, 0.3, () => ({ prompt: 'Rest', act: () => this.offerRest() }));
     }
+    if (d.gate) {
+      consider(d.gate.centre, 3.4, 0.4, () => ({ prompt: 'Look at the gate', act: () => this.lookAtGate() }));
+    }
     const caps = d.caps;
     if (caps) {
       const day = d.clock.day;
@@ -511,6 +541,15 @@ export class Gameplay {
       });
     }
     return best;
+  }
+
+  private lookAtGate(): void {
+    const page = (text: string): Page => ({ speaker: '', role: '', text });
+    this.say([
+      page('The gate is shut with a heavy chain. The gate is very old. The chain is not.'),
+      page('Beyond it the road runs on under dark trees, eastward, the way Aleric went.'),
+      page('There is no way through. Not yet.'),
+    ]);
   }
 
   private pickCap(i: number): void {
@@ -532,6 +571,13 @@ export class Gameplay {
       this.quests.inProgress().map((q) => ({ title: q.title, ready: this.quests.status(q.id) === 'ready', lines: this.quests.lines(q.id) })),
     );
   }
+
+  /** A few pointers in the first minute of a new game. */
+  private static readonly HINTS: readonly [afterSeconds: number, text: string][] = [
+    [3, 'Maelin, the village elder, is by the well. Press E to talk to her.'],
+    [24, 'Tab opens your pack and journal.'],
+    [50, 'Your cottage is just south of the green. Rest in its bed to pass the hours.'],
+  ];
 
   /** @param active true while the game is running (not paused behind the title or pause screen). */
   update(dt: number, active: boolean): void {
@@ -567,6 +613,12 @@ export class Gameplay {
       } else d.audio.setBuzz(0, 0);
     }
 
+    if (this.mode !== 'menu') {
+      const eye = d.player.eye;
+      d.scarecrows?.update(dt, this.playtime, d.clock.isNight, d.clock.day, d.clock.hour, f, d.camera);
+      d.crows?.update(dt, !d.clock.isNight, d.clock.day, eye);
+    }
+
     if (this.mode === 'dialogue') {
       if (input.wasPressed('choice1')) this.advance(0);
       else if (input.wasPressed('choice2')) this.advance(1);
@@ -578,6 +630,16 @@ export class Gameplay {
     if (this.mode !== 'play') return;
 
     this.playtime += dt;
+    const hint = this.flags.hints ?? 0;
+    const next = Gameplay.HINTS[hint];
+    if (next && this.playtime > next[0]) {
+      this.flags.hints = hint + 1;
+      this.hud.toast(next[1]);
+    }
+    // A lantern at the belt lights itself as the day fades.
+    const wantLantern = this.inventory.hasLight() && d.clock.isNight ? 1 : 0;
+    env.lantern.value += (wantLantern - env.lantern.value) * (1 - Math.exp(-dt * 3));
+
     this.target = this.findTarget();
     this.hud.setPrompt(this.target ? this.target.prompt : null);
     if (this.target && input.wasPressed('interact')) this.target.act();

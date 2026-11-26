@@ -338,7 +338,7 @@ export class Ambience {
   }
 
   /** Short one-off sounds. */
-  sfx(kind: 'swing' | 'hit' | 'hurt' | 'pick' | 'coin'): void {
+  sfx(kind: 'swing' | 'hit' | 'hurt' | 'pick' | 'coin' | 'caw' | 'creak'): void {
     const ctx = this.ctx;
     if (!ctx || this.muted) return;
     const t = ctx.currentTime;
@@ -377,6 +377,14 @@ export class Ambience {
       tone('square', 520, 300, 0.12, 0.07);
     } else if (kind === 'pick') {
       tone('sine', 780, 1240, 0.12, 0.1);
+    } else if (kind === 'caw') {
+      // Two harsh, falling cries.
+      tone('sawtooth', 640, 420, 0.16, 0.05);
+      tone('sawtooth', 600, 380, 0.2, 0.05, 0.22);
+    } else if (kind === 'creak') {
+      // Dry wood shifting.
+      tone('sawtooth', 96, 70, 0.5, 0.05);
+      tone('square', 143, 110, 0.35, 0.02, 0.1);
     } else {
       tone('sine', 1568, 1568, 0.09, 0.08);
       tone('sine', 2093, 2093, 0.14, 0.08, 0.07);

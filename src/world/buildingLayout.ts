@@ -6,7 +6,7 @@
  *
  * All coordinates are building-local: y = 0 is the ground-floor surface.
  */
-import { DOOR_HEIGHT, WALL_THICKNESS, type BuildingDef, type Furniture, type Opening, type WallName } from './buildings';
+import { WALL_THICKNESS, type BuildingDef, type Furniture, type Opening, type WallName } from './buildings';
 
 export type BoxPart = 'wall' | 'floor' | 'upper_floor' | 'foundation' | 'step' | 'rail' | 'furniture' | 'glass' | 'door';
 
@@ -153,6 +153,9 @@ const FURNITURE_BLOCKS: Record<string, { size: [number, number, number]; solid: 
   rug: { size: [2.2, 0.02, 1.5], solid: false },
   cauldron: { size: [0.95, 0.85, 0.95], solid: true },
   hive: { size: [0.6, 0.9, 0.6], solid: true },
+  hay: { size: [1.4, 1.05, 1.3], solid: true },
+  stall: { size: [2.2, 1.25, 0.14], solid: true },
+  trough: { size: [1.7, 0.5, 0.55], solid: true },
 };
 
 /** Every box of a building: walls, floors, stairs and furniture. */
@@ -283,5 +286,5 @@ export function buildingBoxes(b: BuildingDef): Box[] {
 
 /** The door's hinge position and size in building-local space. The door is on the front wall. */
 export function doorInfo(b: BuildingDef): { hingeX: number; z: number; width: number; height: number } {
-  return { hingeX: b.door.offset - b.door.width / 2, z: b.depth / 2 - WALL_THICKNESS / 2, width: b.door.width, height: DOOR_HEIGHT };
+  return { hingeX: b.door.offset - b.door.width / 2, z: b.depth / 2 - WALL_THICKNESS / 2, width: b.door.width, height: b.door.height };
 }

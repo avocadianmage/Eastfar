@@ -5,6 +5,7 @@
  */
 import { hash2 } from '../core/rng';
 import { BUILDINGS, footprintSdf, pathSdf } from './buildings';
+import { fieldAt } from './fields';
 import { WORLD_SEED, playableSdf } from './layout';
 import { MASK2_CONIFER, MASK2_FOREST, MASK_DIRT, heightAt, mask2At, maskAt, type TerrainData } from './terrainData';
 
@@ -162,7 +163,7 @@ export function placeRocks(t: TerrainData): RockSet {
       const z = t.minZ + (gz + hash2(gx, gz, WORLD_SEED + 31)) * GRID;
       const sdf = playableSdf(x, z);
       if (sdf > 160) continue;
-      if (sdf < 40 && (pathSdf(x, z) < 1.2 || BUILDINGS.some((b) => footprintSdf(b, x, z) < 2.5))) continue;
+      if (sdf < 40 && (pathSdf(x, z) < 1.2 || fieldAt(x, z) !== null || BUILDINGS.some((b) => footprintSdf(b, x, z) < 2.5))) continue;
       const stony = maskAt(t, x, z, MASK_DIRT);
       const chance = 0.035 + stony * 0.6 + (sdf > 0 && sdf < 50 ? 0.12 : 0);
       if (hash2(gx, gz, WORLD_SEED + 32) > chance) continue;

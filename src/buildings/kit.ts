@@ -361,6 +361,29 @@ function furniture(mb: MeshBuilder, b: BuildingDef, box: Box, rnd: () => number)
       mb.cylinder(0, 0.5, 0, 0.34, 0.5, 10, s(IRON), s(C('#5f8f5a'), 0.25), 0.2);
       mb.tri(new THREE.Vector3(-0.2, 0.16, 0.3), new THREE.Vector3(0.2, 0.16, 0.3), new THREE.Vector3(0, 0.36, 0.3), { color: EMBER, ao: 1, interior: 0, glow: 1 });
       break;
+    case 'hay': {
+      // Stacked bales, bound with twine.
+      const straw = C('#c9a84f');
+      const bale = (x: number, y: number, z: number) => {
+        mb.box(x, y, z, 0.68, 0.5, 1.26, s(shade(straw, 0.88 + rnd() * 0.22)));
+        for (const dz of [-0.36, 0.36]) mb.box(x, y, z + dz, 0.7, 0.52, 0.03, s(C('#7a6238')));
+      };
+      bale(-0.35, 0.25, 0);
+      bale(0.35, 0.25, 0);
+      bale(0.02, 0.77, 0);
+      break;
+    }
+    case 'stall': {
+      // A length of post-and-rail fencing.
+      for (const x of [-1.05, 0, 1.05]) mb.box(x, 0.62, 0, 0.12, 1.25, 0.12, s(dark));
+      for (const y of [0.4, 0.8, 1.15]) mb.box(0, y, 0, 2.2, 0.09, 0.06, s(wood));
+      break;
+    }
+    case 'trough':
+      mb.box(0, 0.3, 0, 1.7, 0.36, 0.55, s(shade(wood, 0.85)));
+      mb.box(0, 0.47, 0, 1.54, 0.04, 0.4, s(C('#2c4a5a')));
+      for (const x of [-0.7, 0.7]) mb.box(x, 0.07, 0, 0.14, 0.14, 0.5, s(dark));
+      break;
     case 'hive':
       for (let i = 0; i < 4; i++) mb.cylinder(0, 0.14 + i * 0.2, 0, 0.3 - i * 0.045, 0.2, 10, s(C('#c9a55a')), s(C('#a8843a')));
       break;

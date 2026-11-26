@@ -39,6 +39,8 @@ export class Player {
   /** Actual horizontal speed over the ground, m/s. */
   speed = 0;
   sprinting = false;
+  /** Mouse look speed multiplier, from the player's settings. */
+  sensitivity = 1;
   /** Called on each footfall with the stride strength 0..1. */
   onFootstep: (strength: number) => void = () => {};
   onJump: () => void = () => {};
@@ -77,8 +79,9 @@ export class Player {
     // --- Look ---
     input.consumeMouse(this.mouse);
     if (controlsEnabled) {
-      this.yaw += this.mouse.x * MOUSE_SENSITIVITY;
-      this.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, this.pitch - this.mouse.y * MOUSE_SENSITIVITY));
+      const look = MOUSE_SENSITIVITY * this.sensitivity;
+      this.yaw += this.mouse.x * look;
+      this.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, this.pitch - this.mouse.y * look));
     }
 
     // --- Wish direction ---

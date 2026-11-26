@@ -115,11 +115,9 @@ test('the innkeeper sells food and buys honeycomb', async ({ page }) => {
   expect(await api<number>(page, 'return api.coins();')).toBe(14);
 });
 
-test('the beekeeper and herbalist now offer their quests', async ({ page }) => {
+test('the beekeeper and herbalist offer their quests', async ({ page }) => {
   await boot(page, 'time=10:00');
-  const offers = await api<string[][]>(page, 'const q = api.game.gameplay.quests; return [q.offersFrom("beekeeper").map(x => x.id), q.offersFrom("herbalist").map(x => x.id), q.offersFrom("farmer_dorrin").map(x => x.id)];');
+  const offers = await api<string[][]>(page, 'const q = api.game.gameplay.quests; return [q.offersFrom("beekeeper").map(x => x.id), q.offersFrom("herbalist").map(x => x.id)];');
   expect(offers[0]).toEqual(['meadow_bees']);
   expect(offers[1]).toEqual(['moon_caps']);
-  // The farms are not built yet, so their quests are held back.
-  expect(offers[2]).toEqual([]);
 });

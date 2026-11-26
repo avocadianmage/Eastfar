@@ -217,3 +217,13 @@ describe('saving', () => {
     expect(new SaveStore(mem).load()).toBeNull();
   });
 });
+
+describe('settings', () => {
+  it('fall back to sensible values when what was stored is missing or wrong', async () => {
+    const { DEFAULT_SETTINGS, sanitizeSettings } = await import('../../src/core/settings');
+    expect(sanitizeSettings(null)).toEqual(DEFAULT_SETTINGS);
+    expect(sanitizeSettings({ quality: 'potato', volume: 7, sensitivity: -3 })).toEqual({ quality: 'high', volume: 1, sensitivity: 0.3 });
+    expect(sanitizeSettings({ quality: 'low', volume: 0.25, sensitivity: 1.5 })).toEqual({ quality: 'low', volume: 0.25, sensitivity: 1.5 });
+    expect(sanitizeSettings({ volume: Number.NaN })).toEqual(DEFAULT_SETTINGS);
+  });
+});

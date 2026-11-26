@@ -7,6 +7,7 @@ import {
   Fn,
   abs,
   attribute,
+  sin,
   float,
   floor,
   fract,
@@ -22,8 +23,9 @@ import {
   vec3,
 } from 'three/tsl';
 import * as THREE from 'three/webgpu';
+import { ROW_SPACING } from '../world/fields';
 import type { TerrainData } from '../world/terrainData';
-import { env } from './env';
+import { env, lanternLight } from './env';
 import type { Quality } from './quality';
 import type { WorldTextures } from './textures';
 
@@ -153,7 +155,15 @@ export class TerrainMesh {
       // no blades are drawn, it takes the colour of the grass itself.
       const dist = length(xz.sub(env.viewPos.xz));
       const far = smoothstep(quality.grassDistance * 0.5, quality.grassDistance * 0.92, dist);
-      const grassCol = mix(canopy.mul(0.6), canopy.mul(0.96), far);
+      const meadowCol = mix(canopy.mul(0.6), canopy.mul(0.96), far);
+      // Fields: tilled earth ridged into furrows; from afar, wheat reads as gold and greens as dark rows.
+      const crop = texture(tex.mask2, uv).a;
+      const wheatAmt = smoothstep(0.75, 0.95, crop);
+      const furrow = sin(xz.y.mul(6.2831853 / ROW_SPACING)).mul(0.5).add(0.5);
+      const tilled = mix(col('#4a3626'), col('#6e5238'), furrow).mul(blotch.mul(0.3).add(0.85));
+      const cropFar = mix(mix(col('#3d7a37'), tilled, furrow.mul(0.6)), col('#c8a24c').mul(blotch.mul(0.25).add(0.85)), wheatAmt);
+      const cropCol = mix(tilled, cropFar, far);
+      const grassCol = mix(meadowCol, cropCol, smoothstep(0.2, 0.45, crop));
 
       const earth = mix(col('#6b5540'), col('#8a7355'), blotch);
       const rock = mix(col('#6d6a62'), col('#8f8b7e'), fine);
@@ -183,6 +193,9 @@ export class TerrainMesh {
       c.mulAssign(fine.mul(0.16).add(0.92));
       return c;
     })();
+
+    // The lantern lights the ground around the player at night.
+    mat.emissiveNode = (mat.colorNode as THREE.Node<'vec3'>).mul(lanternLight(positionWorld));
 
     this.mesh = new THREE.Mesh(buildGeometry(ring, levels, base), mat);
     this.mesh.frustumCulled = false;

@@ -644,3 +644,60 @@ body {
     opacity: 0;
   }
 }
+
+/* ---------- Settings on the title and pause screen ---------- */
+
+#settings {
+  margin: 1.4rem auto 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.55rem;
+  max-width: 21rem;
+  text-align: left;
+  font-size: 0.95rem;
+  color: var(--ink-dim);
+}
+
+#settings label {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+#settings select,
+#settings input[type='range'] {
+  width: 100%;
+  font: inherit;
+  accent-color: var(--accent);
+}
+
+#settings select {
+  color: var(--ink);
+  background: rgba(20, 24, 32, 0.9);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 0.25rem 0.4rem;
+}
+
+#settings .note {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+#settings .note button {
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: none;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
+.credits {
+  margin-top: 1.4rem;
+  font-size: 0.78rem;
+  color: rgba(201, 191, 168, 0.6);
+}

@@ -132,6 +132,36 @@ export const NPCS: readonly NpcDef[] = [
     ],
     nightLines: ['I am not sleepy. I am just resting my eyes standing up.'],
   },
+  {
+    id: 'farmer_dorrin',
+    name: 'Dorrin Haywell',
+    title: 'Farmer',
+    home: 'haywell',
+    day: { x: 436.5, z: 9.5, yaw: 160 },
+    night: { x: 1.4, z: 0.6, yaw: 300 },
+    look: { robe: '#7a6a3a', trim: '#4a3a26', skin: '#c08a64', hair: '#6a5a4a', hat: 'straw', hatColour: '#cdb46a', build: 1.15, height: 1.02 },
+    lines: [
+      'Good soil, this. My family has turned it since before the gate was chained.',
+      'You can see the forest from the east fields. I do not look at it more than I have to.',
+      'Wheat is nearly ready. If the crows leave me any.',
+    ],
+    nightLines: ['Door is barred. Marta’s idea. I did not argue.'],
+  },
+  {
+    id: 'farmer_marta',
+    name: 'Marta Haywell',
+    title: 'Farmer',
+    home: 'haywell',
+    day: { x: 421.5, z: 3.5, yaw: 120 },
+    night: { x: -0.4, z: -0.6, yaw: 40 },
+    look: { robe: '#6a4a5a', trim: '#d8cfb8', skin: '#d8a888', hair: '#4a3626', hat: 'kerchief', hatColour: '#b8a070', build: 0.98 },
+    lines: [
+      'Count the scarecrows on your way in, and count them again on your way out.',
+      'The old gate at the end of the road has been shut all my life. Somebody keeps the chain oiled, though. I have never seen who.',
+      'Mind the creek bridge after dark. Not for any reason. Just mind it.',
+    ],
+    nightLines: ['Hush. Listen. No? Good. Stay by the fire a while.'],
+  },
 ];
 
 export const NPC_BY_ID: Readonly<Record<string, NpcDef>> = Object.freeze(Object.fromEntries(NPCS.map((n) => [n.id, n])));

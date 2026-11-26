@@ -34,7 +34,7 @@ import { TREE_CONIFER, placeTrees, type TreeSet } from '../world/flora';
 import { playableSdf } from '../world/layout';
 import type { Physics } from '../world/physics';
 import type { TerrainData } from '../world/terrainData';
-import { env } from '../render/env';
+import { env, lanternLight } from '../render/env';
 import type { Quality } from '../render/quality';
 import type { WorldTextures } from '../render/textures';
 
@@ -511,7 +511,7 @@ export class Trees {
       // Leaves glow a little when the light is behind them.
       const viewDir = normalize(world.sub(env.viewPos));
       const through = pow(max(dot(viewDir, env.lightDir), 0), 2.5).mul(0.32).mul(leafy);
-      vGlow.assign(colour.mul(env.lightColor).mul(through));
+      vGlow.assign(colour.mul(env.lightColor).mul(through).add(colour.mul(lanternLight(world))));
       return world;
     })();
 

@@ -3,7 +3,7 @@
  * colour the light and fog are, how the wind blows. Every material reads the
  * same values, which is what makes the scene hang together.
  */
-import { uniform } from 'three/tsl';
+import { float, length, saturate, uniform, vec3 } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
 export const env = {
@@ -46,4 +46,19 @@ export const env = {
   playerPos: uniform(new THREE.Vector3()),
   /** Overall exposure applied in post-processing. */
   exposure: uniform(1),
+  /** 0 = no lantern; 1 = the player's lantern is lit. */
+  lantern: uniform(0),
 };
+
+/** How far the lantern's light reaches, metres. */
+const LANTERN_REACH = 11;
+
+/**
+ * Warm light from the lantern at the player's belt, as a colour to multiply a
+ * surface's own colour by. Zero when no lantern is lit.
+ */
+export function lanternLight(worldPos: THREE.Node<'vec3'>) {
+  const d = length(worldPos.sub(env.playerPos.add(vec3(0, 1.1, 0))));
+  const reach = saturate(float(1).sub(d.div(LANTERN_REACH)));
+  return vec3(1.0, 0.72, 0.38).mul(reach.mul(reach)).mul(env.lantern).mul(1.5);
+}

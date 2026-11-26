@@ -10,7 +10,7 @@ import { BRIDGE, BUILDINGS, DOOR_HEIGHT, DOOR_WIDTH, FLOOR_RISE, toWorld, type B
 import { buildingBoxes, doorInfo } from '../world/buildingLayout';
 import type { Physics } from '../world/physics';
 import type { TerrainData } from '../world/terrainData';
-import { env } from '../render/env';
+import { env, lanternLight } from '../render/env';
 import type { WorldTextures } from '../render/textures';
 import { buildBuilding } from './kit';
 import { FACE, MeshBuilder, type FaceStyle } from './meshBuilder';
@@ -78,7 +78,7 @@ export function builtMaterial(tex: WorldTextures): THREE.MeshLambertNodeMaterial
     }
     const flicker = sin(env.time.mul(11).add(positionWorld.x.mul(9))).mul(sin(env.time.mul(17.3).add(positionWorld.y.mul(13)))).mul(0.25).add(1);
     const flame = tint.mul(glow).mul(flicker).mul(2.6);
-    return albedo.mul(lit).mul(interior).add(flame);
+    return albedo.mul(lit).mul(interior).add(flame).add(albedo.mul(lanternLight(positionWorld)));
   })();
   return mat;
 }
@@ -232,6 +232,9 @@ export class Village {
     out.copy(this.buildingMatrix.get(d.building.id)!);
     out.multiply(this.tmpR.makeTranslation(d.hinge.x, d.hinge.y, d.hinge.z));
     out.multiply(this.tmpR.makeRotationY(angle));
+    // One door model, stretched to each doorway (barn doors are wider and taller).
+    const b = d.building;
+    out.multiply(this.tmpR.makeScale(b.door.width / DOOR_WIDTH, b.door.height / DOOR_HEIGHT, 1));
     return out;
   }
 
@@ -245,7 +248,7 @@ export class Village {
     const b = d.building;
     const floorY = this.terrain.buildingGround[b.id]! + FLOOR_RISE;
     const p = toWorld(b, b.door.offset, doorInfo(b).z);
-    return this.physics.addStaticBox(p.x, floorY + DOOR_HEIGHT / 2, p.z, DOOR_WIDTH / 2, DOOR_HEIGHT / 2, 0.06, b.yaw);
+    return this.physics.addStaticBox(p.x, floorY + b.door.height / 2, p.z, b.door.width / 2, b.door.height / 2, 0.06, b.yaw);
   }
 
   /** Open or close a door. Returns the new state. */

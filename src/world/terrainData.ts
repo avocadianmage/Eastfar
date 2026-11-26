@@ -6,6 +6,7 @@
 import { clamp, fbm2, lerp, smoothstep, valueNoise2 } from '../core/rng';
 import { BRIDGE, BUILDINGS, PATHS, footprintSdf, pathSdf } from './buildings';
 import { buildCreek, type CreekSample } from './creek';
+import { FIELDS, fieldSdf } from './fields';
 import { MEADOW, STATUE, TERRAIN, VILLAGE, WORLD_SEED, eastOpening, farmsSdf, playableSdf } from './layout';
 
 export const MASK_GRASS = 0;
@@ -16,6 +17,8 @@ export const MASK_FLOWERS = 3;
 export const MASK2_FOREST = 0;
 export const MASK2_CONIFER = 1;
 export const MASK2_PATH = 2;
+/** 0 = no crop, about 0.55 = rows of greens, 1 = wheat. */
+export const MASK2_CROP = 3;
 
 const FAR = 1e6;
 
@@ -31,7 +34,7 @@ export interface TerrainData {
   readonly normals: Uint8Array;
   /** RGBA8 per sample: grass height, bare dirt, wetness, flower density. */
   readonly masks: Uint8Array;
-  /** RGBA8 per sample: tree cover, share of conifers, road or path, (one spare channel). */
+  /** RGBA8 per sample: tree cover, share of conifers, road or path, crop (greens or wheat). */
   readonly masks2: Uint8Array;
   /** Height of the bridge deck where the East Road crosses the creek. */
   readonly bridgeDeck: number;
@@ -329,16 +332,27 @@ export function bakeTerrain(): TerrainData {
         // The village green: trodden earth around the well where the roads meet.
         const green = Math.hypot(x - 2, z - 1);
         path = Math.max(path, (1 - smoothstep(5.5, 9, green)) * 0.85);
-        if (Math.abs(x) < 80 && Math.abs(z) < 90) {
-          for (const b of BUILDINGS) {
-            const fd = footprintSdf(b, x, z);
-            if (fd < 8) {
-              built = Math.max(built, 1 - smoothstep(0.2, 0.9, fd));
-              forest *= smoothstep(2.5, 6, fd);
-              // A worn apron of earth around each house.
-              path = Math.max(path, (1 - smoothstep(0.3, 2.2, fd)) * 0.7);
-            }
+        for (const b of BUILDINGS) {
+          if (Math.abs(x - b.x) > 22 || Math.abs(z - b.z) > 22) continue;
+          const fd = footprintSdf(b, x, z);
+          if (fd < 8) {
+            built = Math.max(built, 1 - smoothstep(0.2, 0.9, fd));
+            forest *= smoothstep(2.5, 6, fd);
+            // A worn apron of earth around each house.
+            path = Math.max(path, (1 - smoothstep(0.3, 2.2, fd)) * 0.7);
           }
+        }
+      }
+
+      // Crop fields: no trees or flowers; wheat stands tall, greens grow low in rows.
+      let crop = 0;
+      if (x > 200 && x < 830) {
+        for (const f of FIELDS) {
+          const fd = fieldSdf(f, x, z);
+          if (fd > 8) continue;
+          forest *= smoothstep(2, 8, fd);
+          const inField = 1 - smoothstep(-1.2, 0.6, fd);
+          if (inField > 0) crop = Math.max(crop, inField * (f.crop === 'wheat' ? 1 : 0.55));
         }
       }
 
@@ -346,6 +360,12 @@ export function bakeTerrain(): TerrainData {
       masks2[o + MASK2_FOREST] = Math.round(clamp(forest, 0, 1) * 255);
       masks2[o + MASK2_CONIFER] = Math.round(conifer * 255);
       masks2[o + MASK2_PATH] = Math.round(clamp(path, 0, 1) * 255);
+      masks2[o + MASK2_CROP] = Math.round(clamp(crop, 0, 1) * 255);
+      if (crop > 0.05) {
+        const wheat = smoothstep(0.7, 0.95, crop);
+        masks[o + MASK_GRASS] = Math.round(lerp(masks[o + MASK_GRASS]!, (wheat > 0.5 ? 0.98 : 0.5) * 255, clamp(crop * 2, 0, 1)));
+        masks[o + MASK_FLOWERS] = Math.round(masks[o + MASK_FLOWERS]! * (1 - clamp(crop * 2, 0, 1)));
+      }
 
       // Under trees the grass is short and patchy and few flowers grow; none on paths or under floors.
       const shade = smoothstep(0.3, 0.9, forest);

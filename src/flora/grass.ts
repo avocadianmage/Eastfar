@@ -11,6 +11,7 @@ import {
   dot,
   float,
   floor,
+  fract,
   hash,
   instanceIndex,
   length,
@@ -18,6 +19,7 @@ import {
   mix,
   mod,
   normalize,
+  abs,
   positionGeometry,
   pow,
   sin,
@@ -31,8 +33,9 @@ import {
   vec3,
 } from 'three/tsl';
 import * as THREE from 'three/webgpu';
+import { ROW_SPACING } from '../world/fields';
 import type { TerrainData } from '../world/terrainData';
-import { env } from '../render/env';
+import { env, lanternLight } from '../render/env';
 import type { Quality } from '../render/quality';
 import { col, grassColorNode, terrainUv } from '../render/terrain';
 import type { WorldTextures } from '../render/textures';
@@ -145,14 +148,21 @@ export class Grass {
       const mask = texture(tex.mask, uv).level(float(0));
       const nrm = texture(tex.normal, uv).level(float(0)).xyz.mul(2).sub(1);
       const growth = mask.r;
+      // Crops: wheat stands tall and golden; greens grow low, in rows that run east-west.
+      const crop = texture(tex.mask2, uv).level(float(0)).a;
+      const wheat = smoothstep(0.75, 0.95, crop);
+      const greens = smoothstep(0.3, 0.5, crop).mul(float(1).sub(wheat));
+      const inRow = float(1).sub(smoothstep(0.1, 0.2, abs(fract(xz.y.div(ROW_SPACING)).sub(0.5))));
 
       // Thin out and shorten where the mask says grass is sparse; vanish at the ring's edges.
       const dist = length(xz.sub(env.viewPos.xz));
-      const present = smoothstep(0.02, 0.1, growth).mul(smoothstep(r5.mul(0.5), r5.mul(0.5).add(0.12), growth.mul(1.5)));
+      const present = smoothstep(0.02, 0.1, growth)
+        .mul(smoothstep(r5.mul(0.5), r5.mul(0.5).add(0.12), growth.mul(1.5)))
+        .mul(mix(float(1), inRow, greens));
       const fadeOut = float(1).sub(smoothstep(ring.outer * 0.72, ring.outer * 0.98, dist));
       const fadeIn = ring.inner > 0 ? smoothstep(ring.inner * 0.72, ring.inner * 1.05, dist) : float(1);
       const scale = present.mul(fadeOut).mul(fadeIn);
-      const height = growth.mul(0.62).mul(r3.mul(0.9).add(0.55)).mul(ring.heightScale).mul(scale).toVar();
+      const height = growth.mul(0.62).mul(r3.mul(0.9).add(0.55)).mul(wheat.mul(0.55).add(1)).mul(ring.heightScale).mul(scale).toVar();
 
       // Blade shape.
       const tt = positionGeometry.y;
@@ -190,16 +200,18 @@ export class Grass {
       );
 
       // Colour: dark at the root, bright at the tip, tinted by the patch of meadow it grows in.
-      const fieldCol = grassColorNode(tex.noise, xz, true);
+      const meadowCol = grassColorNode(tex.noise, xz, true);
+      const fieldCol = mix(mix(meadowCol, col('#3f8a3a'), greens.mul(0.7)), col('#c9a04a'), wheat.mul(0.85));
       const shade = mix(float(0.34), float(1.16), pow(tt, 0.8));
-      const tip = mix(fieldCol, col('#c2c56a'), tt.mul(r2).mul(0.4));
+      const tip = mix(mix(fieldCol, col('#c2c56a'), tt.mul(r2).mul(0.4)), col('#edd27c'), wheat.mul(tt).mul(0.7));
       const gustLight = push.mul(0.22).mul(tt).add(1);
       vColor.assign(tip.mul(shade).mul(r1.mul(0.22).add(0.89)).mul(gustLight));
 
       // Light shining through blades when looking toward the sun or moon.
       const viewDir = normalize(vec3(xz.x, ground, xz.y).sub(env.viewPos));
       const through = pow(max(dot(viewDir, env.lightDir), 0), 3).mul(tt).mul(0.5);
-      vGlow.assign(fieldCol.mul(env.lightColor).mul(through));
+      const lit = tip.mul(shade).mul(lanternLight(vec3(xz.x, ground, xz.y)));
+      vGlow.assign(fieldCol.mul(env.lightColor).mul(through).add(lit));
 
       // Lit like the ground beneath, leaning a little with the bend, so the field reads as one soft surface.
       vNormal.assign(normalize(nrm.add(vec3(bend.x, 0, bend.y).mul(0.35))));
