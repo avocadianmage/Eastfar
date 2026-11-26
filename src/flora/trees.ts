@@ -26,6 +26,7 @@ import {
   step,
   texture,
   transformNormalToView,
+  uniform,
   uv,
   varyingProperty,
   vec2,
@@ -46,14 +47,16 @@ import type { WorldTextures } from '../render/textures';
 export const TREE_FAR = 460;
 const MID_FAR = 235;
 /**
- * Where one level of detail hands over to the next, both are drawn at full size in the same
- * place: the incoming one dissolves in over the first half of a band of distance and the outgoing
- * one dissolves away over the second half. Nothing grows, shrinks or moves. These are half the
- * widths (metres) of those bands.
+ * A tree changes level of detail when it crosses a distance, and the change then plays out over
+ * this long (seconds) whatever the player does next: both versions stand at full size in the same
+ * place, the new one dissolves in over the first half and the old one dissolves away over the
+ * second. Nothing grows, shrinks or moves, and a tree is never left half-way.
  */
-const BAND_CLOSE = 7;
-const BAND_NEAR = 7;
-const BAND_MID = 9;
+const HANDOVER = 0.9;
+/** Each tree starts its change up to this long (seconds) after crossing, so a row of them does not start on one frame. */
+const HANDOVER_DELAY = 0.35;
+/** Having changed, a tree must come back this far (metres) past the distance before it changes again. */
+const HYSTERESIS = 2;
 /** Each tree hands over this much nearer or further than the rest (metres), so a wood does not change all at once. */
 const STAGGER = 5;
 /** A tree out of view is still drawn if it stands within this distance (metres) of the edge of the view: its shadow may fall there. */
@@ -62,8 +65,8 @@ const SHADOW_REACH = 30;
 const TURN_MARGIN = Math.tan(0.32);
 /** How much of the sky's colour shaded bark gives back, on top of the scene's own ambient light. */
 const WOOD_SKY_FILL = 0.45;
-/** Trees are re-sorted only after the player has moved a little; this much slack (metres) covers the lag. */
-const SORT_SLACK = 2.5;
+/** Seconds since the trees were made; hand-overs are timed against it. Starts above zero because zero means "not changing". */
+const treeClock = uniform(10);
 
 function lin(hex: string): THREE.Color {
   return new THREE.Color(hex);
@@ -663,13 +666,27 @@ export class Trees {
   /** The nearest broadleaves, drawn in full. */
   private readonly close: Lod;
   private readonly fwd = new THREE.Vector3();
+  private clock = 10;
+  /** Counts the sorts, to tell a tree that was in the last one from a tree new to the view. */
+  private generation = 1;
+  /** When the last hand-over under way will have finished: time to sort again and drop what it left behind. */
+  private settleAt = Infinity;
+  /** Per tree: its level now (0 the close-up, 1 to 3 the simpler ones), the level it is leaving, when that change began, and the sort that last kept it. */
+  private readonly tier: Uint8Array;
+  private readonly from: Uint8Array;
+  private readonly since: Float32Array;
+  private readonly stamp: Uint32Array;
 
   /** @param closeDistance overrides the preset's distance for full-detail broadleaves (metres) */
   constructor(scene: THREE.Scene, t: TerrainData, tex: WorldTextures, quality: Quality, physics: Physics | null, closeDistance?: number) {
     this.set = placeTrees(t);
+    this.tier = new Uint8Array(this.set.count);
+    this.from = new Uint8Array(this.set.count);
+    this.since = new Float32Array(this.set.count).fill(-1e9);
+    this.stamp = new Uint32Array(this.set.count);
     this.nearDist = quality.treeDetailDistance;
     // Within this distance a broadleaf is drawn with real limbs, twigs and fixed leaf sprigs.
-    this.closeDist = Math.min(Math.max(closeDistance ?? quality.treeCloseDistance, 12), this.nearDist - 30);
+    this.closeDist = Math.min(Math.max(closeDistance ?? quality.treeCloseDistance, 12), this.nearDist - 10);
 
     const caps = [1400, 5000, 14000];
     const leafTex = leafTexture();
@@ -733,14 +750,14 @@ export class Trees {
                 {
                   suffix: 'leaves',
                   geometry: level === 0 ? leafCards(BROADLEAF_BLOBS, 26, 1) : leafCards(BROADLEAF_BLOBS_MID, 6, 2.1),
-                  material: this.material(level, kind === 0, tex, 'facing', leafTex),
+                  material: this.material(level, tex, 'facing', leafTex),
                   cast: false,
                   receive: level === 0,
                 },
               ]
             : [];
         row.push(
-          makeLod(`trees-${kind}-${level}`, builders[kind]!(level), caps[level]!, this.material(level, kind === 0, tex, false, null), { cast: level === 0, receive: level < 2 }, leaves),
+          makeLod(`trees-${kind}-${level}`, builders[kind]!(level), caps[level]!, this.material(level, tex, false, null), { cast: level === 0, receive: level < 2 }, leaves),
         );
       }
       this.lods.push(row);
@@ -748,9 +765,9 @@ export class Trees {
     // The broadleaf from close by: limbs, twigs and leaf sprigs that hold still. The sprigs do not
     // cast the crown's shadow themselves: a sixth as many, larger, do it for them (drawn only into
     // the shadow map), which halves what a close-up tree costs there.
-    this.close = makeLod('trees-close', broadleafWood(), 400, this.material('close', true, tex, false, null), { cast: true, receive: true }, [
-      { suffix: 'leaves', geometry: leafSprigs(BROADLEAF_BLOBS), material: this.material('close', true, tex, 'fixed', leafTex), cast: false, receive: true },
-      { suffix: 'shade', geometry: leafSprigs(BROADLEAF_BLOBS, 10, 3, false, 1.75), material: this.material('close', true, tex, 'shade', leafTex), cast: true, receive: false },
+    this.close = makeLod('trees-close', broadleafWood(), 400, this.material('close', tex, false, null), { cast: true, receive: true }, [
+      { suffix: 'leaves', geometry: leafSprigs(BROADLEAF_BLOBS), material: this.material('close', tex, 'fixed', leafTex), cast: false, receive: true },
+      { suffix: 'shade', geometry: leafSprigs(BROADLEAF_BLOBS, 10, 3, false, 1.75), material: this.material('close', tex, 'shade', leafTex), cast: true, receive: false },
     ]);
 
     // Solid trunks, but only where the player can actually walk.
@@ -766,18 +783,15 @@ export class Trees {
 
   /**
    * @param level 0 near, 1 middle, 2 far, or 'close' for the close-up broadleaf
-   * @param closeUp true where the nearest trees of this kind are drawn by a close-up version instead
    * @param cards 'facing' for leaf cards that turn to the camera, 'fixed' for sprigs that do not, 'shade' for sprigs drawn only into the shadow map
    */
-  private material(level: 0 | 1 | 2 | 'close', closeUp: boolean, tex: WorldTextures, cards: false | 'facing' | 'fixed' | 'shade', leafTex: THREE.Texture | null): THREE.MeshLambertNodeMaterial {
+  private material(level: 0 | 1 | 2 | 'close', tex: WorldTextures, cards: false | 'facing' | 'fixed' | 'shade', leafTex: THREE.Texture | null): THREE.MeshLambertNodeMaterial {
     const mat = new THREE.MeshLambertNodeMaterial();
-    const near = this.nearDist;
-    const close = this.closeDist;
     const vColor = varyingProperty('vec3', 'vTreeColor');
     const vGlow = varyingProperty('vec3', 'vTreeGlow');
     const vNormal = varyingProperty('vec3', 'vTreeNormal');
     const vFacing = varyingProperty('float', 'vTreeFacing');
-    // How far this tree is through arriving from the nearer level (1 = all here) and leaving for the further one (1 = all gone).
+    // How far this tree is through arriving at this level (1 = all here) and through leaving it (1 = all gone).
     const vArrived = varyingProperty('float', 'vTreeArrived');
     const vLeft = varyingProperty('float', 'vTreeLeft');
 
@@ -792,35 +806,19 @@ export class Trees {
       const scale = inst.w;
       const dist = length(inst.xz.sub(env.viewPos.xz));
 
-      // Each level of detail shows only in its own band of distance. At a hand-over the incoming
-      // level dissolves in over the outgoing one, and only then does the outgoing one dissolve
-      // away (see the fragment stage), so a tree is never thinner than either of its versions.
-      // Here it is only worked out how far through each hand-over this tree is; every tree has
-      // its own offset so a row of them does not change together.
-      const d = dist.sub(seed.sub(0.5).mul(2 * STAGGER));
-      const hand = (centre: number, band: number) => ({ arriving: smoothstep(centre - band, centre, d), leaving: smoothstep(centre, centre + band, d) });
-      const toNear = hand(close, BAND_CLOSE);
-      const toMid = hand(near, BAND_NEAR);
-      const toFar = hand(MID_FAR, BAND_MID);
-      let arrived: THREE.Node<'float'>;
-      let left: THREE.Node<'float'>;
-      if (level === 'close') {
-        arrived = float(1);
-        left = toNear.leaving;
-      } else if (level === 0) {
-        arrived = closeUp ? toNear.arriving : float(1);
-        left = toMid.leaving;
-      } else if (level === 1) {
-        arrived = toMid.arriving;
-        left = toFar.leaving;
-      } else {
-        arrived = toFar.arriving;
-        left = float(0);
-      }
+      // A level draws the trees it is sent. A tree changing level is sent to both for a moment, and
+      // the fourth number says when the change began: positive on the level it is arriving at,
+      // negative on the one it is leaving, zero when it is not changing. The new version dissolves
+      // in first and only then does the old one dissolve away (see the fragment stage), so the
+      // tree is never thinner than either.
+      const when = inst2.w;
+      const age = treeClock.sub(when.abs());
+      const arrived = mix(float(1), age.div(HANDOVER / 2).clamp(0, 1), step(1e-4, when));
+      const left = age.sub(HANDOVER / 2).div(HANDOVER / 2).clamp(0, 1).mul(step(1e-4, when.negate()));
       vArrived.assign(arrived);
       vLeft.assign(left);
-      // Outside its band a level is not drawn at all. (Only at the far limit, where trees give
-      // way to the hills' canopy 460 m off, do they still shrink away.)
+      // Not here yet, or gone: not drawn at all. (Only at the far limit, where trees give way to
+      // the hills' canopy 460 m off, do they shrink away.)
       let lodScale = step(0.002, arrived).mul(step(left, 0.998));
       if (level === 2) lodScale = lodScale.mul(float(1).sub(smoothstep(TREE_FAR * 0.86, TREE_FAR * 0.99, dist)));
 
@@ -909,8 +907,14 @@ export class Trees {
     return mat;
   }
 
-  /** Re-sort nearby trees into detail levels when the player has moved or turned enough. */
-  update(camera: THREE.PerspectiveCamera): void {
+  /**
+   * Re-sort nearby trees into detail levels when the player has moved or turned enough, or a
+   * change of level has finished.
+   * @param dt seconds since the last frame
+   */
+  update(camera: THREE.PerspectiveCamera, dt: number): void {
+    this.clock += Math.min(dt, 0.25);
+    treeClock.value = this.clock;
     const cx = camera.position.x;
     const cz = camera.position.z;
     camera.getWorldDirection(this.fwd);
@@ -918,12 +922,17 @@ export class Trees {
     const dPos = Math.hypot(cx - this.lastPos.x, cz - this.lastPos.z);
     let dYaw = Math.abs(yaw - this.lastYaw);
     if (dYaw > Math.PI) dYaw = Math.PI * 2 - dYaw;
-    if (dPos < 1.5 && dYaw < 0.09) return;
+    if (dPos < 1.5 && dYaw < 0.09 && this.clock < this.settleAt) return;
+    // After a jump (the first frame, a teleport, waking in bed) trees are simply put at their levels.
+    const jumped = dPos > 25;
     this.lastPos.set(cx, 0, cz);
     this.lastYaw = yaw;
+    const generation = ++this.generation;
+    let busyUntil = 0;
 
     const s = this.set;
     for (const row of this.lods) for (const l of row) l.count = 0;
+    this.close.count = 0;
 
     // Keep the trees in a wide cone ahead, and any tree near enough to the edge of the view for
     // its shadow to reach into it; the rest, behind and beside the player, are not drawn.
@@ -935,15 +944,8 @@ export class Trees {
     const sinEdge = Math.sin(halfFov);
     const lookingFlat = Math.abs(this.fwd.y) < 0.75;
 
-    // Each level is sent every tree that could be in its band, with slack for not having
-    // re-sorted yet. (Distances here carry each tree's own offset, as in the shader.)
-    const closeEnd = this.closeDist + BAND_CLOSE + SORT_SLACK;
-    const nearStart = this.closeDist - BAND_CLOSE - SORT_SLACK;
-    const nearEnd = this.nearDist + BAND_NEAR + SORT_SLACK;
-    const midStart = this.nearDist - BAND_NEAR - SORT_SLACK;
-    const midEnd = MID_FAR + BAND_MID + SORT_SLACK;
-    const farStart = MID_FAR - BAND_MID - SORT_SLACK;
-    this.close.count = 0;
+    const closeDist = this.closeDist;
+    const nearDist = this.nearDist;
     const R = TREE_FAR;
     const c0x = Math.max(0, Math.floor((cx - R - s.minX) / s.cellSize));
     const c1x = Math.min(s.cellsX - 1, Math.floor((cx + R - s.minX) / s.cellSize));
@@ -971,16 +973,48 @@ export class Trees {
             }
           }
           const row = this.lods[s.kind[i]!]!;
-          // Bands overlap so one level can dissolve out while the next is already there.
-          const broadleaf = s.kind[i] !== TREE_CONIFER;
+          // Conifers have no close-up version: their nearest level is 1.
+          const lowest = s.kind[i] !== TREE_CONIFER ? 0 : 1;
+          // Each tree changes a little nearer or further than its neighbours.
           const ds = d - (s.seed[i]! - 0.5) * 2 * STAGGER;
-          if (broadleaf && ds < closeEnd) this.push(this.close, s, i);
-          if (ds < nearEnd && !(broadleaf && ds < nearStart)) this.push(row[0]!, s, i);
-          if (ds >= midStart && ds < midEnd) this.push(row[1]!, s, i);
-          if (ds >= farStart) this.push(row[2]!, s, i);
+          let tier: number;
+          if (jumped || this.stamp[i] !== generation - 1) {
+            // New to the view: it is simply at the level its distance calls for.
+            tier = ds < closeDist && lowest === 0 ? 0 : ds < nearDist ? 1 : ds < MID_FAR ? 2 : 3;
+            this.since[i] = -1e9;
+          } else {
+            tier = this.tier[i]!;
+            if (this.clock >= this.since[i]! + HANDOVER) {
+              // Further than this level reaches, or nearer than it starts? (One step at a time.)
+              const reach = tier === 0 ? closeDist : tier === 1 ? nearDist : MID_FAR;
+              const start = tier === 1 ? closeDist : tier === 2 ? nearDist : MID_FAR;
+              let want = tier;
+              if (tier < 3 && ds > reach + HYSTERESIS) want = tier + 1;
+              else if (tier > lowest && ds < start - HYSTERESIS) want = tier - 1;
+              if (want !== tier) {
+                this.from[i] = tier;
+                this.since[i] = this.clock + ((s.seed[i]! * 7.31) % 1) * HANDOVER_DELAY;
+                tier = want;
+              }
+            }
+          }
+          this.tier[i] = tier;
+          this.stamp[i] = generation;
+          const since = this.since[i]!;
+          const level = tier === 0 ? this.close : row[tier - 1]!;
+          if (this.clock < since + HANDOVER) {
+            // Changing: the old version stays until the new one has arrived.
+            const old = this.from[i] === 0 ? this.close : row[this.from[i]! - 1]!;
+            this.push(level, s, i, since);
+            this.push(old, s, i, -since);
+            if (since + HANDOVER > busyUntil) busyUntil = since + HANDOVER;
+          } else {
+            this.push(level, s, i, 0);
+          }
         }
       }
     }
+    this.settleAt = busyUntil > 0 ? busyUntil : Infinity;
 
     for (const l of [this.close, ...this.lods.flat()]) {
       {
@@ -1002,7 +1036,8 @@ export class Trees {
     }
   }
 
-  private push(l: Lod, s: TreeSet, i: number): void {
+  /** @param when 0, or when this tree's change of level began: positive if it is arriving at this level, negative if leaving it */
+  private push(l: Lod, s: TreeSet, i: number, when: number): void {
     if (l.count >= l.capacity) return;
     const o = l.count * 4;
     l.a[o] = s.x[i]!;
@@ -1013,7 +1048,7 @@ export class Trees {
     l.b[o] = Math.sin(r);
     l.b[o + 1] = Math.cos(r);
     l.b[o + 2] = s.seed[i]!;
-    l.b[o + 3] = 0;
+    l.b[o + 3] = when;
     l.count++;
   }
 
@@ -1023,6 +1058,32 @@ export class Trees {
   }
 
   /** Number of trees currently sent to the GPU, by detail level. */
+  /** For tests: the level of detail of the tree nearest a point (0 the close-up, 1 to 3 the simpler ones), or -1 if it is not being drawn. */
+  levelNear(x: number, z: number): number {
+    const s = this.set;
+    let best = -1;
+    let bd = Infinity;
+    for (let i = 0; i < s.count; i++) {
+      const d = Math.hypot(s.x[i]! - x, s.z[i]! - z);
+      if (d < bd) {
+        bd = d;
+        best = i;
+      }
+    }
+    return best < 0 || this.stamp[best] !== this.generation ? -1 : this.tier[best]!;
+  }
+
+  /** For tests: how many trees are part-way through a change of level, how many instances are sent to the GPU, and how far the close-up reaches. */
+  handovers(): { changing: number; instances: number; closeDistance: number } {
+    let changing = 0;
+    let instances = 0;
+    for (const l of [this.close, ...this.lods.flat()]) {
+      instances += l.count;
+      for (let k = 0; k < l.count; k++) if (l.b[k * 4 + 3]! > 0 && this.clock < l.b[k * 4 + 3]! + HANDOVER) changing++;
+    }
+    return { changing, instances, closeDistance: this.closeDist };
+  }
+
   counts(): [number, number, number] {
     const out: [number, number, number] = [0, 0, 0];
     for (const row of this.lods) row.forEach((l, i) => (out[i]! += l.count));

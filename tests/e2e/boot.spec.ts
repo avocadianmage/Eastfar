@@ -119,6 +119,45 @@ test('the invisible wall keeps the player on the walkable land', async ({ page }
   expect(s.x).toBeGreaterThan(-160);
 });
 
+test('a tree changes to its detailed version as the player nears it, and is left settled when they stop', async ({ page }) => {
+  test.setTimeout(600_000);
+  await page.setViewportSize({ width: 320, height: 180 });
+  await boot(page, 'time=10:00&skip=flowers,grass');
+  type Trees = { treeHandovers(): { changing: number; closeDistance: number }; treeLevel(x: number, z: number): number; nearestTree(x: number, z: number, kind?: number): { x: number; z: number } };
+  type T = { __eastfar: Api & Trees };
+  const handovers = () => page.evaluate(() => (window as unknown as T).__eastfar.treeHandovers());
+  // A broadleaf in the open meadow, approached along a clear line from the north-west.
+  const tree = await page.evaluate(() => (window as unknown as T).__eastfar.nearestTree(-21.6, -54.1, 0));
+  const level = () => page.evaluate((t) => (window as unknown as T).__eastfar.treeLevel(t.x, t.z), tree);
+  const reach = (await handovers()).closeDistance;
+  const dir = { x: 0.669, z: 0.743 };
+  const from = reach + 9;
+  await page.evaluate(([x, z]) => (window as unknown as T).__eastfar.teleport(x!, z!, 138), [tree.x - dir.x * from, tree.z - dir.z * from]);
+  await expect.poll(level, { timeout: 120_000 }).toBeGreaterThanOrEqual(0);
+  // Arriving by teleport, nothing is part-way: the tree is simply its simpler version.
+  expect(await level()).toBe(1);
+  expect((await handovers()).changing).toBe(0);
+
+  await page.evaluate(() => (window as unknown as T).__eastfar.hold('forward', true));
+  let sawChange = false;
+  await expect
+    .poll(
+      async () => {
+        const [s, h] = await Promise.all([state(page), handovers()]);
+        if (h.changing > 0) sawChange = true;
+        return Math.hypot(s.x - tree.x, s.z - tree.z);
+      },
+      { timeout: 300_000, intervals: [300] },
+    )
+    .toBeLessThan(reach - 10);
+  await page.evaluate(() => (window as unknown as T).__eastfar.hold('forward', false));
+  expect(sawChange, 'some tree was seen part-way through changing').toBe(true);
+
+  // Standing still, every change runs to its end and nothing is left half-way.
+  await expect.poll(async () => (await handovers()).changing, { timeout: 200_000, intervals: [500] }).toBe(0);
+  expect(await level()).toBe(0);
+});
+
 test('every flower head reads its own painting, and every stem a green one', async ({ page }) => {
   // Guards the sheet's row order: read upside down, stem cards showed two flower heads and heads showed bits of stem.
   await page.setViewportSize({ width: 320, height: 180 });

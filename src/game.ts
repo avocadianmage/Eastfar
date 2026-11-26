@@ -325,7 +325,7 @@ export class Game {
     this.player.applyToCamera(this.camera);
     this.camera.updateMatrixWorld();
     this.grass?.update(this.camera);
-    this.trees?.update(this.camera);
+    this.trees?.update(this.camera, dt);
     this.flowers?.update(this.camera);
     this.props?.update(this.player.feet);
     this.village?.update(dt, this.player.eye, this.player.feet, this.animTime, this.sky.tod.dayFactor);
@@ -469,6 +469,10 @@ export class Game {
         return best < 0 ? null : { x: s.x[best]!, y: s.y[best]!, z: s.z[best]!, kind: s.kind[best]!, scale: s.scale[best]!, dist: bd };
       },
       treeCounts: () => this.trees?.counts() ?? [0, 0, 0],
+      /** Trees part-way through changing level of detail, and tree instances drawn. */
+      treeHandovers: () => this.trees?.handovers() ?? { changing: 0, instances: 0, closeDistance: 0 },
+      /** Level of detail of the tree nearest a point: 0 the close-up, 1 to 3 the simpler ones, -1 not drawn. */
+      treeLevel: (x: number, z: number) => this.trees?.levelNear(x, z) ?? -1,
       /** What each kind of flower's head and stem read from the painted sheet (see Flowers.sheetReport). */
       flowerSheet: () => this.flowers?.sheetReport() ?? [],
       /** Act on whatever the player is looking at; returns the prompt shown, or null. */
