@@ -133,7 +133,7 @@ export function sackHead({ neck, joint, sack = '#c3a56e', straw = '#d8bb62' }) {
   return {
     parts: [
       // Straw frill below the tie, seen from both sides.
-      { prim: lathe([[0.062, 0.012], [0.105, -0.03], [0.15, -0.075]], { ...opts, twoSided: true }), tint: straw },
+      { prim: lathe([[0.062, 0.012], [0.095, -0.022], [0.12, -0.05]], { ...opts, twoSided: true }), tint: straw },
       // The rope it is tied with.
       { prim: lathe([[0.068, 0], [0.072, 0.012], [0.068, 0.024]], opts), tint: '#6a5236' },
       // The sack.

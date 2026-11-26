@@ -130,7 +130,10 @@ export class Game {
     onStatus('Raising the hills…');
     await nextFrame();
     // People are downloaded while the land is being made.
-    const figures = this.params.skip.has('npcs') || this.params.skip.has('village') ? null : loadCharacterAssets([...new Set(NPCS.map((n) => n.look.model))]);
+    const wanted = new Set<string>();
+    if (!this.params.skip.has('npcs')) for (const n of NPCS) wanted.add(n.look.model);
+    if (!this.params.skip.has('scarecrows')) wanted.add('scarecrow');
+    const figures = wanted.size === 0 || this.params.skip.has('village') ? null : loadCharacterAssets([...wanted]);
     figures?.catch(() => {});
     this.terrain = bakeTerrain();
 
@@ -169,14 +172,16 @@ export class Game {
       if (figures) {
         this.figures = await figures;
         this.figureMaterial = characterMaterial(this.figures.atlas);
+      }
+      if (this.figures && this.figureMaterial && !skip.has('npcs')) {
         this.npcs = new Npcs(this.scene, this.figures, this.figureMaterial, this.terrain, this.physics, this.clock.isNight);
       }
       if (!skip.has('bees')) {
         this.bees = new BeeSwarms(this.scene, built, this.terrain);
         content.push('bees');
       }
-      if (!skip.has('scarecrows')) {
-        this.scarecrows = new Scarecrows(this.scene, built, this.terrain, this.physics);
+      if (this.figures && this.figureMaterial && !skip.has('scarecrows')) {
+        this.scarecrows = new Scarecrows(this.scene, this.figures, this.figureMaterial, built, this.terrain, this.physics);
         content.push('scarecrows');
       }
       this.gate = createGate(this.scene, built, this.terrain, this.physics);
@@ -447,7 +452,7 @@ export class Game {
       swarms: () => (this.bees?.swarms ?? []).map((b) => ({ x: b.position.x, y: b.position.y, z: b.position.z, alive: b.alive, health: b.health, state: b.state })),
       caps: () => (this.caps?.spots ?? []).map((c, i) => ({ x: c.x, z: c.z, available: this.caps!.available(i, this.clock.day) })),
       hurt: (amount: number) => this.gameplay.hurt(amount),
-      scarecrows: () => (this.scarecrows?.all ?? []).map((s) => ({ id: s.def.id, x: s.feet.x, z: s.feet.z, state: s.state, health: s.health, walks: s.def.walks })),
+      scarecrows: () => (this.scarecrows?.all ?? []).map((s) => ({ id: s.def.id, x: s.feet.x, z: s.feet.z, state: s.state, health: s.health, walks: s.def.walks, clip: s.figure.clip })),
       crows: () => (this.crows?.all ?? []).map((c) => ({ x: c.position.x, y: c.position.y, z: c.position.z, state: c.state })),
       /** Open or close every door (for screenshots and tests). */
       setDoors: (open: boolean) => {

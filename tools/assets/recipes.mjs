@@ -156,10 +156,10 @@ export const CHARACTERS = {
     hat: 'straw',
     hatColour: '#c9a955',
     wear: [
-      ['Peasant_Body', 'peasant2', '#d8c8a8'],
-      ['Peasant_Arms', 'peasant2', '#c9b796'],
-      ['Peasant_Legs', 'peasant2', '#cdbb98'],
-      ['Peasant_Feet', 'peasant2', '#a89878'],
+      ['Peasant_Body', 'peasant', '#c8bca0'],
+      ['Peasant_Arms', 'peasant', '#b8ac92'],
+      ['Peasant_Legs', 'peasant', '#d6c8a6'],
+      ['Peasant_Feet', 'peasant2', '#b8a888'],
     ],
   },
   // Marta Haywell, farmer.

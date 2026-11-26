@@ -8,7 +8,7 @@ type Api = {
   hold(k: string, d: boolean): void;
   mode(): string;
   health(): number;
-  scarecrows(): { id: string; x: number; z: number; state: string; health: number; walks: boolean }[];
+  scarecrows(): { id: string; x: number; z: number; state: string; health: number; walks: boolean; clip: string }[];
   crows(): { x: number; y: number; z: number; state: string }[];
 };
 type W = { __eastfar: Api };
@@ -91,6 +91,8 @@ test('scarecrows stand still by day; some walk at night and can be put down', as
   let all = await api<ReturnType<Api['scarecrows']>>(page, 'return api.scarecrows();');
   expect(all.length).toBe(10);
   expect(all.every((s) => s.state === 'post')).toBe(true);
+  // Arms out on the crossbar.
+  expect(all.every((s) => s.clip === 'A_TPose')).toBe(true);
 
   // After dark the one in this field comes down off its post.
   await api(page, 'api.setTime(22.5);');
@@ -98,6 +100,9 @@ test('scarecrows stand still by day; some walk at night and can be put down', as
   // The ones that do not walk never move, however close the player comes.
   all = await api<ReturnType<Api['scarecrows']>>(page, 'return api.scarecrows();');
   expect(all.filter((s) => !s.walks).every((s) => s.state === 'post')).toBe(true);
+  // It shambles, and claws when it strikes.
+  await page.waitForFunction(() => (window as unknown as W).__eastfar.scarecrows().find((s) => s.id === 'sc_se1')!.clip === 'Zombie_Walk_Fwd_Loop', null, { timeout: 60_000 });
+  await page.waitForFunction(() => (window as unknown as W).__eastfar.scarecrows().find((s) => s.id === 'sc_se1')!.clip === 'Zombie_Scratch', null, { timeout: 90_000 });
 
   // Left alone it reaches the player and strikes.
   await page.waitForFunction(() => (window as unknown as W).__eastfar.health() < 10, null, { timeout: 90_000 });
@@ -118,6 +123,7 @@ test('scarecrows stand still by day; some walk at night and can be put down', as
   await page.waitForFunction(() => (window as unknown as W).__eastfar.scarecrows().every((s) => s.state === 'post'), null, { timeout: 60_000 });
   const back = (await api<ReturnType<Api['scarecrows']>>(page, 'return api.scarecrows();')).find((s) => s.id === 'sc_se1')!;
   expect(Math.hypot(back.x - 590, back.z - 118)).toBeLessThan(0.1);
+  expect(back.clip).toBe('A_TPose');
 });
 
 test('crows dive at the player by day and can be struck down', async ({ page }) => {
