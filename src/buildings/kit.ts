@@ -11,6 +11,7 @@ import * as THREE from 'three/webgpu';
 import { mulberry32 } from '../core/rng';
 import { WALL_THICKNESS, type BuildingDef, type Furniture } from '../world/buildings';
 import { STAIR_RUN, STAIR_STEPS, STAIR_WIDTH, UPPER_FLOOR_THICKNESS, buildingBoxes, storeyFloor, wallFrame, wallTop, type Box } from '../world/buildingLayout';
+import { isModelled } from '../world/dressing';
 import { FACE, MeshBuilder, type FaceStyle } from './meshBuilder';
 
 const ROOF_PITCH = (38 * Math.PI) / 180;
@@ -44,7 +45,11 @@ export interface BuiltBuilding {
   triangles: number;
 }
 
-export function buildBuilding(b: BuildingDef): BuiltBuilding {
+/**
+ * @param modelled true when furniture that has a model (see world/dressing.ts) is drawn from it,
+ *   so only its solid block is kept here and nothing is drawn for it
+ */
+export function buildBuilding(b: BuildingDef, modelled = false): BuiltBuilding {
   const mb = new MeshBuilder();
   const rnd = mulberry32(Math.abs(Math.round(b.x * 131 + b.z * 17)) + 7);
   const plaster = C(b.plaster);
@@ -100,7 +105,7 @@ export function buildBuilding(b: BuildingDef): BuiltBuilding {
         panes.push({ x: box.x, y: box.y, z: box.z, nx: box.outward![0], nz: box.outward![1], width: Math.max(box.hx, box.hz) * 2, height: box.hy * 2 });
         break;
       case 'furniture':
-        furniture(mb, b, box, rnd);
+        if (!(modelled && isModelled((box.furniture as Furniture).type))) furniture(mb, b, box, rnd);
         break;
       default:
         break;

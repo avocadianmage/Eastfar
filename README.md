@@ -84,7 +84,7 @@ npm run assets:build
 npm run assets:preview -- elder="model=elder&clip=Idle_Loop&t=1&views=full:0,face:30"
 ```
 
-`assets:fetch` pulls only the needed files from the packs' free tiers into `.cache/packs/`. `tools/assets/recipes.mjs` says which pieces, colours and animation clips make each character. `assets:preview` writes screenshots of a built character to `shots/assets/`.
+`assets:build` runs both `tools/assets/build.mjs` (characters and animation) and `tools/assets/build-props.mjs` (furniture and props). `assets:fetch` pulls only the needed files from the packs' free tiers into `.cache/packs/`. `tools/assets/recipes.mjs` says which pieces, colours and animation clips make each character. `assets:preview` writes screenshots of a built character to `shots/assets/`.
 
 ### Screenshots
 
@@ -100,4 +100,4 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the design and milestone plan.
 
 Eastfar is built with [three.js](https://threejs.org) (MIT) and the [Rapier](https://rapier.rs) physics engine (Apache-2.0).
 
-The people of the village and their animations come from [Quaternius](https://quaternius.com)'s public-domain (CC0) packs: Universal Base Characters, Modular Character Outfits – Fantasy, and Universal Animation Library 1 and 2. Every file and its source is listed in [public/assets/CREDITS.md](public/assets/CREDITS.md). The terrain, plants, buildings and sound are generated in code.
+The people of the village and their animations come from [Quaternius](https://quaternius.com)'s public-domain (CC0) packs: Universal Base Characters, Modular Character Outfits – Fantasy, and Universal Animation Library 1 and 2. Furniture and props are from the same author's Fantasy Props MegaKit. Every file and its source is listed in [public/assets/CREDITS.md](public/assets/CREDITS.md). The terrain, plants, buildings and sound are generated in code.

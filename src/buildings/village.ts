@@ -117,6 +117,8 @@ export class Village {
     private readonly terrain: TerrainData,
     tex: WorldTextures,
     private readonly physics: Physics | null,
+    /** True when furniture with a model is drawn from it (see buildings/props.ts) rather than built here. */
+    modelledFurniture = false,
   ) {
     const mat = builtMaterial(tex);
     this.material = mat;
@@ -126,7 +128,7 @@ export class Village {
 
     for (const b of BUILDINGS) {
       const floorY = terrain.buildingGround[b.id]! + FLOOR_RISE;
-      const built = buildBuilding(b);
+      const built = buildBuilding(b, modelledFurniture);
       triangles += built.triangles;
       const mesh = new THREE.Mesh(built.geometry, mat);
       mesh.position.set(b.x, floorY, b.z);

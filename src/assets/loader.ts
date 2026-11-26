@@ -90,3 +90,91 @@ export function instantiate(model: CharacterModel, material: THREE.Material): Ch
   }
   return { root, lods, bones };
 }
+
+export interface PropModel {
+  /** Plain float geometry in metres, y up: position, normal, uv (into the trims image), color. */
+  geometry: THREE.BufferGeometry;
+  min: THREE.Vector3;
+  max: THREE.Vector3;
+}
+
+export interface PropAssets {
+  /** The kit's four trim textures stacked in one image; repeats sideways. */
+  trims: THREE.Texture;
+  props: Map<string, PropModel>;
+}
+
+/** Copy an attribute into plain floats (the file stores them packed into small integers). */
+function floats(attr: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, size: number): THREE.Float32BufferAttribute {
+  const out = new Float32Array(attr.count * size);
+  for (let i = 0; i < attr.count; i++) {
+    out[i * size] = attr.getX(i);
+    if (size > 1) out[i * size + 1] = attr.getY(i);
+    if (size > 2) out[i * size + 2] = attr.getZ(i);
+  }
+  return new THREE.Float32BufferAttribute(out, size);
+}
+
+/** Furniture and props (made by tools/assets/build-props.mjs). */
+export async function loadPropAssets(): Promise<PropAssets> {
+  const [trims, file] = await Promise.all([new THREE.TextureLoader().loadAsync(assetUrl('props/trims.webp')), gltfLoader().loadAsync(assetUrl('props/props.glb'))]);
+  trims.flipY = false;
+  trims.colorSpace = THREE.SRGBColorSpace;
+  trims.wrapS = THREE.RepeatWrapping;
+  trims.wrapT = THREE.ClampToEdgeWrapping;
+  trims.anisotropy = 4;
+
+  const props = new Map<string, PropModel>();
+  file.scene.updateMatrixWorld(true);
+  file.scene.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const src = mesh.geometry;
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', floats(src.getAttribute('position'), 3));
+    geometry.setAttribute('normal', floats(src.getAttribute('normal'), 3));
+    geometry.setAttribute('uv', floats(src.getAttribute('uv'), 2));
+    geometry.setAttribute('color', floats(src.getAttribute('color'), 3));
+    geometry.setIndex(src.getIndex());
+    // The file's positions are packed; the node's own transform unpacks them into metres.
+    geometry.applyMatrix4(mesh.matrixWorld);
+    geometry.computeBoundingBox();
+    const box = geometry.boundingBox!;
+    // The mesh is named after its node, or sits just inside it.
+    const name = mesh.name && mesh.name !== 'prop' ? mesh.name : (mesh.parent?.name ?? mesh.name);
+    props.set(name, { geometry, min: box.min.clone(), max: box.max.clone() });
+  });
+  return { trims, props };
+}
+
+export interface ArmAssets {
+  /** The player's right forearm and hand as a fist. Wrist at the origin, forearm running back along +z. */
+  fist: THREE.BufferGeometry;
+  /** The same, closed round a handle. */
+  grip: THREE.BufferGeometry;
+  /** The middle of the closed hand, where a handle passes through it. */
+  gripAt: THREE.Vector3;
+}
+
+/** The player's own arm (made with the characters by tools/assets/build.mjs; textured from the character atlas). */
+export async function loadArmAssets(): Promise<ArmAssets> {
+  const file = await gltfLoader().loadAsync(assetUrl('characters/arms.glb'));
+  file.scene.updateMatrixWorld(true);
+  const found = new Map<string, THREE.BufferGeometry>();
+  file.scene.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const src = mesh.geometry;
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', floats(src.getAttribute('position'), 3));
+    geometry.setAttribute('normal', floats(src.getAttribute('normal'), 3));
+    geometry.setAttribute('uv', floats(src.getAttribute('uv'), 2));
+    geometry.setAttribute('color', floats(src.getAttribute('color'), 3));
+    geometry.setIndex(src.getIndex());
+    geometry.applyMatrix4(mesh.matrixWorld);
+    const name = mesh.name === 'fist' || mesh.name === 'grip' ? mesh.name : (mesh.parent?.name ?? '');
+    found.set(name, geometry);
+  });
+  const grip = (file.scene.userData.grip ?? [0, 0, -0.1]) as [number, number, number];
+  return { fist: found.get('fist')!, grip: found.get('grip')!, gripAt: new THREE.Vector3(...grip) };
+}

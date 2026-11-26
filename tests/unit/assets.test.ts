@@ -3,6 +3,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { NPCS } from '../../src/data/npcs';
+import { allPropModels } from '../../src/world/dressing';
 
 const DIR = join(process.cwd(), 'public', 'assets');
 
@@ -47,6 +48,12 @@ describe('character assets', () => {
         expect(clips.has(clip), `${npc.id}: ${clip} for ${body}`).toBe(true);
       }
     }
+  });
+
+  it('has a model for every piece of furniture and every prop that is placed', () => {
+    const gltf = readGlb(join(DIR, 'props', 'props.glb'));
+    const built = new Set(gltf.nodes.filter((n) => n.mesh !== undefined).map((n) => n.name));
+    for (const name of allPropModels()) expect(built.has(name), name).toBe(true);
   });
 
   it('keeps the download small', () => {

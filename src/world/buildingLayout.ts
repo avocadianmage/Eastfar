@@ -158,6 +158,11 @@ const FURNITURE_BLOCKS: Record<string, { size: [number, number, number]; solid: 
   trough: { size: [1.7, 0.5, 0.55], solid: true },
 };
 
+/** Size [x, y, z] of a kind of furniture's block, before it is turned. */
+export function furnitureSize(type: string): [number, number, number] | null {
+  return FURNITURE_BLOCKS[type]?.size ?? null;
+}
+
 /** Every box of a building: walls, floors, stairs and furniture. */
 export function buildingBoxes(b: BuildingDef): Box[] {
   const out: Box[] = [];

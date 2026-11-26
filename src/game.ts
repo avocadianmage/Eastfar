@@ -2,8 +2,9 @@
  * The game: builds the world, then runs the frame loop.
  */
 import * as THREE from 'three/webgpu';
-import { loadCharacterAssets, type CharacterAssets } from './assets/loader';
+import { loadArmAssets, loadCharacterAssets, loadPropAssets, type CharacterAssets } from './assets/loader';
 import { Ambience } from './audio/ambience';
+import { Props } from './buildings/props';
 import { Village } from './buildings/village';
 import { GameClock } from './core/clock';
 import { Input, type Action } from './core/input';
@@ -29,6 +30,7 @@ import { Rocks } from './flora/rocks';
 import { TREE_FAR, Trees } from './flora/trees';
 import { placeMoonCaps } from './world/flora';
 import { characterMaterial } from './render/characterMaterial';
+import { propMaterial } from './render/propMaterial';
 import { env } from './render/env';
 import { DynamicResolution } from './render/dynamicResolution';
 import { PerfHud } from './render/perfHud';
@@ -89,6 +91,7 @@ export class Game {
   fireflies?: Fireflies;
   village?: Village;
   npcs?: Npcs;
+  props?: Props;
   figures?: CharacterAssets;
   private figureMaterial?: THREE.Material;
   bees?: BeeSwarms;
@@ -133,8 +136,14 @@ export class Game {
     const wanted = new Set<string>();
     if (!this.params.skip.has('npcs')) for (const n of NPCS) wanted.add(n.look.model);
     if (!this.params.skip.has('scarecrows')) wanted.add('scarecrow');
-    const figures = wanted.size === 0 || this.params.skip.has('village') ? null : loadCharacterAssets([...wanted]);
+    // The player's own arm reads the characters' atlas, so that is loaded even if nobody else is drawn.
+    const wantArm = !this.params.skip.has('viewmodel');
+    const figures = (wanted.size === 0 && !wantArm) || this.params.skip.has('village') ? null : loadCharacterAssets([...wanted]);
+    const armsLoading = figures && wantArm ? loadArmAssets() : null;
+    armsLoading?.catch(() => {});
     figures?.catch(() => {});
+    const propsLoading = this.params.skip.has('props') || this.params.skip.has('village') ? null : loadPropAssets();
+    propsLoading?.catch(() => {});
     this.terrain = bakeTerrain();
 
     onStatus('Lighting the sky…');
@@ -158,7 +167,10 @@ export class Game {
     this.physics = await Physics.create(this.terrain);
     if (!skip.has('trees')) this.trees = new Trees(this.scene, this.terrain, this.textures, this.quality, this.physics);
     if (!skip.has('rocks')) this.rocks = new Rocks(this.scene, this.terrain, this.textures, this.physics);
-    if (!skip.has('village')) this.village = new Village(this.scene, this.terrain, this.textures, this.physics);
+    // Furniture and props come from models unless left out (`skip=props`), in which case the code-built furniture is used.
+    const propAssets = propsLoading ? await propsLoading : null;
+    if (!skip.has('village')) this.village = new Village(this.scene, this.terrain, this.textures, this.physics, propAssets !== null);
+    if (this.village && propAssets) this.props = new Props(this.scene, propAssets, propMaterial(propAssets.trims), this.terrain, this.physics);
     this.player = new Player(this.physics, this.terrain);
     this.player.fly = this.params.fly;
     this.player.sensitivity = this.settings.sensitivity;
@@ -187,7 +199,14 @@ export class Game {
       this.gate = createGate(this.scene, built, this.terrain, this.physics);
       // The camera joins the scene so the arm and weapon attached to it are drawn.
       this.scene.add(this.camera);
-      if (!skip.has('viewmodel')) this.viewmodel = new Viewmodel(this.camera);
+      if (!skip.has('viewmodel') && this.figureMaterial && armsLoading) {
+        this.viewmodel = new Viewmodel(this.camera, {
+          arms: await armsLoading,
+          armMaterial: this.figureMaterial,
+          sword: propAssets?.props.get('Sword_Bronze') ?? null,
+          propMaterial: this.props?.material ?? null,
+        });
+      }
     }
     if (this.trees && !skip.has('mushrooms')) {
       this.caps = new MoonCaps(this.scene, placeMoonCaps(this.terrain, this.trees.set));
@@ -297,6 +316,7 @@ export class Game {
     this.grass?.update(this.camera);
     this.trees?.update(this.camera);
     this.flowers?.update(this.camera);
+    this.props?.update(this.player.feet);
     this.village?.update(dt, this.player.eye, this.player.feet, this.animTime, this.sky.tod.dayFactor);
     this.npcs?.update(dt, this.clock.isNight, this.player.feet, this.camera);
     if (this.viewmodel) {
@@ -454,6 +474,16 @@ export class Game {
       hurt: (amount: number) => this.gameplay.hurt(amount),
       scarecrows: () => (this.scarecrows?.all ?? []).map((s) => ({ id: s.def.id, x: s.feet.x, z: s.feet.z, state: s.state, health: s.health, walks: s.def.walks, clip: s.figure.clip })),
       crows: () => (this.crows?.all ?? []).map((c) => ({ x: c.position.x, y: c.position.y, z: c.position.z, state: c.state })),
+      /** Hold the arm at a point of its swing, 0..1 (null to let go): for screenshots. */
+      swingAt: (t: number | null) => {
+        if (this.viewmodel) this.viewmodel.forcedSwing = t;
+      },
+      /** Give and equip a weapon by id. */
+      wield: (id: string) => {
+        this.gameplay.inventory.add(id, 1);
+        const slot = this.gameplay.inventory.slots.findIndex((it) => it?.id === id);
+        if (slot >= 0) this.gameplay.inventory.equipFromSlot(slot);
+      },
       /** Open or close every door (for screenshots and tests). */
       setDoors: (open: boolean) => {
         for (const d of this.village?.doors ?? []) if (d.open !== open) this.village!.toggleDoor(d);

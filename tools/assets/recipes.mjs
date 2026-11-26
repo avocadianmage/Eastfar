@@ -213,3 +213,24 @@ export const ANIM_FILES = {
   anims1: 'anims1/Unreal-Godot/UAL1_Standard.glb',
   anims2: 'anims2/Unreal-Godot/UAL2_Standard.glb',
 };
+
+/**
+ * Furniture and props taken from the Fantasy Props MegaKit, by the kit's model names.
+ */
+export const PROPS = [
+  // Furniture
+  'Bed_Twin1', 'Table_Large', 'Stool', 'Chair_1', 'Bench', 'Bookcase_2', 'Cabinet', 'Workbench', 'Nightstand_Shelf',
+  'Barrel', 'Barrel_Apples', 'Barrel_Holder', 'Crate_Wooden', 'Chest_Wood', 'Anvil_Log', 'Cauldron', 'Stall_Empty', 'Stall_Cart_Empty',
+  // Things that sit on or by furniture
+  'Mug', 'Table_Plate', 'Candle_1', 'Candle_2', 'CandleStick', 'CandleStick_Triple', 'Bottle_1', 'Potion_1', 'Potion_2', 'Potion_4',
+  'SmallBottles_1', 'BookGroup_Medium_1', 'BookGroup_Small_1', 'Book_Stack_1', 'Pot_1_Lid', 'Vase_2', 'Vase_4', 'Shelf_Simple', 'Shelf_Small_Bottles',
+  // Work and trade
+  'Bucket_Wooden_1', 'Bag', 'FarmCrate_Apple', 'FarmCrate_Carrot', 'FarmCrate_Empty', 'WeaponStand', 'Whetstone', 'Shield_Wooden',
+  'Sword_Bronze', 'Axe_Bronze', 'Pickaxe_Bronze', 'Rope_2', 'Peg_Rack', 'Dummy', 'Lantern_Wall', 'Torch_Metal', 'Chandelier',
+];
+
+/**
+ * The kit's textures repeat sideways and its models' u coordinates run outside 0..1;
+ * they are stored as (u - min) / span and turned back in the game's shader.
+ */
+export const PROP_UV = { min: -2, span: 5 };

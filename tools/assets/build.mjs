@@ -482,9 +482,176 @@ async function buildCharacters() {
     const bytes = await writeCharacter(id, extras, sk, lods);
     report.push(`${id.padEnd(14)} ${g.indices.length / 3} → ${lods.map((l) => l.indices.length / 3).join(' / ')} triangles, ${(bytes / 1000).toFixed(0)} kB`);
   }
+  if (!only) report.push(await buildArms(bodies.male, mapper));
   const atlasBytes = (await stat(join(OUT, 'atlas.webp'))).size;
   console.log(`atlas ${atlas.width}×${atlas.height}, ${(atlasBytes / 1000).toFixed(0)} kB`);
   for (const line of report) console.log(line);
+}
+
+// ---------------------------------------------------------------- the player's own arm
+
+/** The right arm below the elbow, hand and fingers included. */
+const ARM_JOINT = /^(lowerarm|hand|index|middle|ring|pinky|thumb)_.*r$|^(lowerarm|hand)_r$/;
+
+/** 4x4 matrices as flat column-major arrays. */
+function compose(t, q) {
+  const [x, y, z, w] = q;
+  return [
+    1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * (x * z - y * w), 0,
+    2 * (x * y - z * w), 1 - 2 * (x * x + z * z), 2 * (y * z + x * w), 0,
+    2 * (x * z + y * w), 2 * (y * z - x * w), 1 - 2 * (x * x + y * y), 0,
+    t[0], t[1], t[2], 1,
+  ];
+}
+function mulMat(a, b) {
+  const o = new Array(16).fill(0);
+  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) for (let k = 0; k < 4; k++) o[c * 4 + r] += a[k * 4 + r] * b[c * 4 + k];
+  return o;
+}
+const applyPoint = (m, p) => [m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12], m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13], m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14]];
+const applyDir = (m, p) => [m[0] * p[0] + m[4] * p[1] + m[8] * p[2], m[1] * p[0] + m[5] * p[1] + m[9] * p[2], m[2] * p[0] + m[6] * p[1] + m[10] * p[2]];
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const unit = (a) => {
+  const l = Math.hypot(a[0], a[1], a[2]) || 1;
+  return [a[0] / l, a[1] / l, a[2] / l];
+};
+
+/** The target body's joint rotations at one moment of a clip, carried over from the mannequin as in buildAnimations. */
+async function poseAt(target, clipName, seconds) {
+  const [pack] = CLIPS[clipName];
+  const doc = await readDocument(join(PACKS, ANIM_FILES[pack]));
+  const src = skeleton(doc);
+  const anim = doc.getRoot().listAnimations().find((a) => a.getName() === clipName);
+  const local = src.rotation.map((r) => [...r]);
+  for (const ch of anim.listChannels()) {
+    if (ch.getTargetPath() !== 'rotation') continue;
+    const j = src.names.indexOf(ch.getTargetNode().getName());
+    if (j < 0) continue;
+    const times = ch.getSampler().getInput().getArray();
+    const values = ch.getSampler().getOutput().getArray();
+    let k = 0;
+    while (k + 1 < times.length && times[k + 1] <= seconds) k++;
+    local[j] = Array.from(values.subarray(k * 4, k * 4 + 4));
+  }
+  const srcRestWorld = worldRotations(src, src.rotation);
+  const tgtRestWorld = worldRotations(target, target.rotation);
+  const srcWorld = worldRotations(src, local);
+  const tgtWorld = [];
+  const out = [];
+  for (let j = 0; j < target.names.length; j++) {
+    tgtWorld.push(qmul(qmul(srcWorld[j], qinv(srcRestWorld[j])), tgtRestWorld[j]));
+    out.push(target.parents[j] < 0 ? tgtWorld[j] : qmul(qinv(tgtWorld[target.parents[j]]), tgtWorld[j]));
+  }
+  return out;
+}
+
+/**
+ * What the player sees of themselves: the right forearm and hand, cut from the
+ * outfit's arms, posed once as a fist and once gripping a handle, and turned
+ * so that the forearm points straight ahead (-z) from the wrist at the origin.
+ * Not skinned: the game moves it as a whole.
+ */
+async function buildArms(body, mapper) {
+  const sk = body.skeleton;
+  const arms = await source(join(PARTS_DIR, 'Male_Peasant_Arms.gltf'));
+  const jointOf = (name) => sk.names.indexOf(name);
+  const armJoints = new Set(sk.names.map((n, i) => (ARM_JOINT.test(n) ? i : -1)).filter((i) => i >= 0));
+
+  const doc = new Document();
+  const buffer = doc.createBuffer();
+  const material = doc.createMaterial('character');
+  const scene = doc.createScene('arms');
+  const extras = {};
+  let triangles = 0;
+  for (const [name, clip, time] of [
+    ['fist', 'Idle_Loop', 0.5],
+    ['grip', 'Sword_Idle', 0.4],
+  ]) {
+    const pose = await poseAt(sk, clip, time);
+    // Where each joint is in this pose, and the matrix that carries a bound vertex there.
+    const world = [];
+    const skin = [];
+    for (let j = 0; j < sk.names.length; j++) {
+      const local = compose(sk.translation[j], pose[j]);
+      world.push(sk.parents[j] < 0 ? local : mulMat(world[sk.parents[j]], local));
+      skin.push(mulMat(world[j], Array.from(sk.inverseBind.subarray(j * 16, j * 16 + 16))));
+    }
+    const at = (joint) => applyPoint(world[jointOf(joint)], [0, 0, 0]);
+    const wrist = at('hand_r');
+    const forward = unit(sub(wrist, at('lowerarm_r')));
+    // The line of the knuckles, little finger to first finger, squared off against the forearm.
+    let knuckles = sub(at('index_01_r'), at('pinky_01_r'));
+    knuckles = unit(sub(knuckles, forward.map((v) => v * dot3(knuckles, forward))));
+    // A fist is held knuckles level, first finger inward; a grip holds its handle upright.
+    const Z = forward.map((v) => -v);
+    let X;
+    let Y;
+    if (name === 'fist') {
+      X = knuckles.map((v) => -v);
+      Y = cross3(Z, X);
+    } else {
+      Y = knuckles;
+      X = cross3(Y, Z);
+    }
+    const toFrame = (p) => {
+      const d = sub(p, wrist);
+      return [dot3(d, X), dot3(d, Y), dot3(d, Z)];
+    };
+    const dirToFrame = (d) => [dot3(d, X), dot3(d, Y), dot3(d, Z)];
+
+    const g = new Geometry();
+    for (const prim of arms.prims) {
+      const keep = new Uint8Array(prim.count);
+      const posed = { ...prim, position: new Float32Array(prim.count * 3), normal: new Float32Array(prim.count * 3) };
+      for (let i = 0; i < prim.count; i++) {
+        let share = 0;
+        const p = [prim.position[i * 3], prim.position[i * 3 + 1], prim.position[i * 3 + 2]];
+        const n = [prim.normal[i * 3], prim.normal[i * 3 + 1], prim.normal[i * 3 + 2]];
+        const outP = [0, 0, 0];
+        const outN = [0, 0, 0];
+        for (let k = 0; k < 4; k++) {
+          const w = prim.weights[i * 4 + k];
+          if (w === 0) continue;
+          const j = prim.joints[i * 4 + k];
+          if (armJoints.has(j)) share += w;
+          const sp = applyPoint(skin[j], p);
+          const sn = applyDir(skin[j], n);
+          for (let a = 0; a < 3; a++) {
+            outP[a] += sp[a] * w;
+            outN[a] += sn[a] * w;
+          }
+        }
+        keep[i] = share >= 0.5 ? 1 : 0;
+        posed.position.set(toFrame(outP), i * 3);
+        posed.normal.set(unit(dirToFrame(outN)), i * 3);
+      }
+      const skinPart = prim.material.startsWith('MI_Regular');
+      g.add(posed, { keep, mapUv: mapper(skinPart ? 'hands_male' : 'peasant'), tint: skinPart ? '#f2d3bb' : '#cfc3a8' });
+    }
+    triangles += g.indices.length / 3;
+    const acc = (type, array, normalized = false) => doc.createAccessor().setType(type).setArray(array).setNormalized(normalized).setBuffer(buffer);
+    const prim = doc
+      .createPrimitive()
+      .setMaterial(material)
+      .setIndices(acc('SCALAR', Uint16Array.from(g.indices)))
+      .setAttribute('POSITION', acc('VEC3', Float32Array.from(g.position)))
+      .setAttribute('NORMAL', acc('VEC3', Float32Array.from(g.normal)))
+      .setAttribute('TEXCOORD_0', acc('VEC2', Float32Array.from(g.uv)))
+      .setAttribute('COLOR_0', acc('VEC3', Uint8Array.from(g.color), true));
+    scene.addChild(doc.createNode(name).setMesh(doc.createMesh(name).addPrimitive(prim)));
+    if (name === 'grip') {
+      // The middle of the closed hand, where a handle passes through it.
+      const mids = ['index_02_r', 'middle_02_r', 'ring_02_r', 'pinky_02_r', 'index_01_r', 'pinky_01_r', 'thumb_02_r'].map((j) => toFrame(at(j)));
+      extras.grip = [0, 1, 2].map((a) => +(mids.reduce((sum, m) => sum + m[a], 0) / mids.length).toFixed(4));
+    }
+  }
+  scene.setExtras(extras);
+  await doc.transform(quantize({ quantizePosition: 14, quantizeNormal: 10, quantizeTexcoord: 14, quantizeColor: 8 }), meshopt({ encoder: MeshoptEncoder, level: 'medium' }));
+  const file = join(OUT, 'arms.glb');
+  await io.write(file, doc);
+  return `arms           ${triangles} triangles in two poses, grip at ${extras.grip.join(', ')}, ${((await stat(file)).size / 1000).toFixed(0)} kB`;
 }
 
 // ---------------------------------------------------------------- animation
