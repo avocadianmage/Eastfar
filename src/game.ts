@@ -7,16 +7,21 @@ import { Village } from './buildings/village';
 import { GameClock } from './core/clock';
 import { Input, type Action } from './core/input';
 import { SaveStore } from './core/save';
+import { BeeSwarms } from './entities/bees';
+import { MoonCaps } from './entities/mushrooms';
 import { Npcs } from './entities/npc';
 import { createStatue } from './entities/statue';
+import { Viewmodel } from './entities/viewmodel';
 import { Gameplay } from './systems/gameplay';
 import type { DebugParams } from './core/params';
 import { Player } from './entities/player';
+import { Butterflies } from './flora/butterflies';
 import { Fireflies } from './flora/fireflies';
 import { Flowers } from './flora/flowers';
 import { Grass } from './flora/grass';
 import { Rocks } from './flora/rocks';
 import { TREE_FAR, Trees } from './flora/trees';
+import { placeMoonCaps } from './world/flora';
 import { env } from './render/env';
 import { DynamicResolution } from './render/dynamicResolution';
 import { PerfHud } from './render/perfHud';
@@ -75,6 +80,10 @@ export class Game {
   fireflies?: Fireflies;
   village?: Village;
   npcs?: Npcs;
+  bees?: BeeSwarms;
+  caps?: MoonCaps;
+  butterflies?: Butterflies;
+  viewmodel?: Viewmodel;
   gameplay!: Gameplay;
   /** True if a saved game was found and loaded at start-up. */
   resumed = false;
@@ -132,10 +141,24 @@ export class Game {
     this.player.onFootstep = (strength) => this.audio.step(this.player.wading > 0.06 ? 'water' : 'grass', strength);
     this.player.onLand = (impact) => this.audio.step(this.player.wading > 0.06 ? 'water' : 'land', impact);
 
+    const content: string[] = [];
     if (this.village) {
-      createStatue(this.scene, this.village.material, this.terrain, this.physics);
-      if (!skip.has('npcs')) this.npcs = new Npcs(this.scene, this.village.material, this.terrain, this.physics, this.clock.isNight);
+      const built = this.village.material;
+      createStatue(this.scene, built, this.terrain, this.physics);
+      if (!skip.has('npcs')) this.npcs = new Npcs(this.scene, built, this.terrain, this.physics, this.clock.isNight);
+      if (!skip.has('bees')) {
+        this.bees = new BeeSwarms(this.scene, built, this.terrain);
+        content.push('bees');
+      }
+      // The camera joins the scene so the arm and weapon attached to it are drawn.
+      this.scene.add(this.camera);
+      if (!skip.has('viewmodel')) this.viewmodel = new Viewmodel(this.camera);
     }
+    if (this.trees && !skip.has('mushrooms')) {
+      this.caps = new MoonCaps(this.scene, placeMoonCaps(this.terrain, this.trees.set));
+      content.push('mushrooms');
+    }
+    if (!skip.has('butterflies')) this.butterflies = new Butterflies(this.scene, this.terrain, this.textures);
 
     const p = this.params;
     this.gameplay = new Gameplay({
@@ -146,9 +169,12 @@ export class Game {
       terrain: this.terrain,
       village: this.village,
       npcs: this.npcs,
+      bees: this.bees,
+      caps: this.caps,
+      audio: this.audio,
       save: SaveStore.browser(p.nosave),
       // Parts of the world that exist so far; quests needing others are not yet offered.
-      content: [],
+      content,
       ui: this.ui,
       recapture: () => this.onRecapture(),
       release: () => this.input.releaseLock(),
@@ -231,6 +257,11 @@ export class Game {
     this.flowers?.update(this.camera);
     this.village?.update(dt, this.player.eye, this.player.feet, this.animTime, this.sky.tod.dayFactor);
     this.npcs?.update(dt, this.animTime, this.clock.isNight, this.player.feet, this.camera);
+    if (this.viewmodel) {
+      const gp = this.gameplay;
+      this.viewmodel.root.visible = !this.player.fly;
+      this.viewmodel.update(dt, gp.inventory.weapon().id, gp.combat.swing, this.player.grounded ? Math.min(1, this.player.speed / 7) : 0, this.animTime);
+    }
 
     const feet = this.player.feet;
     const eye = this.player.eye;
@@ -366,6 +397,9 @@ export class Game {
         const n = this.npcs?.byId(id);
         return n ? { x: n.position.x, y: n.position.y, z: n.position.z, night: n.atNight } : null;
       },
+      swarms: () => (this.bees?.swarms ?? []).map((b) => ({ x: b.position.x, y: b.position.y, z: b.position.z, alive: b.alive, health: b.health, state: b.state })),
+      caps: () => (this.caps?.spots ?? []).map((c, i) => ({ x: c.x, z: c.z, available: this.caps!.available(i, this.clock.day) })),
+      hurt: (amount: number) => this.gameplay.hurt(amount),
       /** Open or close every door (for screenshots and tests). */
       setDoors: (open: boolean) => {
         for (const d of this.village?.doors ?? []) if (d.open !== open) this.village!.toggleDoor(d);

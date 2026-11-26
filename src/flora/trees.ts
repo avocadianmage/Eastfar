@@ -81,8 +81,8 @@ function prepare(
   return geo;
 }
 
-const BARK_DARK = lin('#3f3126');
-const BARK_LIGHT = lin('#6c5846');
+const BARK_DARK = lin('#5c4838');
+const BARK_LIGHT = lin('#84705a');
 
 function trunk(height: number, r0: number, r1: number, sides: number, segs: number, treeHeight: number): THREE.BufferGeometry {
   const g = new THREE.CylinderGeometry(r1, r0, height, sides, segs, true);

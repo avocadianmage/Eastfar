@@ -25,6 +25,7 @@ export class Hud {
   private readonly tracker: HTMLDivElement;
   private readonly toasts: HTMLDivElement;
   private readonly fadeEl: HTMLDivElement;
+  private readonly hurtEl: HTMLDivElement;
   private readonly dialogue: HTMLDivElement;
   private readonly speaker: HTMLDivElement;
   private readonly speech: HTMLDivElement;
@@ -54,6 +55,7 @@ export class Hud {
     this.speech = el('div', 'dialogue-text', this.dialogue);
     this.choices = el('div', 'dialogue-choices', this.dialogue);
 
+    this.hurtEl = el('div', 'hud-hurt', parent);
     this.fadeEl = el('div', 'hud-fade', parent);
     this.setVisible(false);
   }
@@ -117,6 +119,14 @@ export class Hud {
       window.setTimeout(() => t.remove(), 600);
     }, 4200);
     while (this.toasts.children.length > 5) this.toasts.firstElementChild?.remove();
+  }
+
+  /** A red flash at the edges of the screen when hurt. */
+  flashHurt(): void {
+    this.hurtEl.classList.remove('show');
+    // Reading a layout property restarts the CSS animation.
+    void this.hurtEl.offsetWidth;
+    this.hurtEl.classList.add('show');
   }
 
   /** Black screen for resting: 0 clear .. 1 black. */

@@ -5,6 +5,7 @@
  * that a save file holds.
  */
 import * as THREE from 'three/webgpu';
+import type { Ambience } from '../audio/ambience';
 import type { Door, Village } from '../buildings/village';
 import { NEW_GAME_HOUR, type GameClock } from '../core/clock';
 import type { Input } from '../core/input';
@@ -13,14 +14,17 @@ import { item } from '../data/items';
 import type { NpcDef } from '../data/npcs';
 import { PLACES } from '../data/places';
 import type { QuestDef } from '../data/quests';
+import type { BeeSwarms } from '../entities/bees';
+import type { MoonCaps } from '../entities/mushrooms';
 import type { Npc, Npcs } from '../entities/npc';
 import type { Player } from '../entities/player';
 import { Hud } from '../ui/hud';
 import { InventoryScreen } from '../ui/inventoryScreen';
-import { BUILDINGS, FLOOR_RISE, toWorld } from '../world/buildings';
+import { BUILDINGS, BUILDING_BY_ID, FLOOR_RISE, toWorld } from '../world/buildings';
 import { storeyFloor } from '../world/buildingLayout';
 import { SPAWN } from '../world/layout';
 import type { TerrainData } from '../world/terrainData';
+import { Combat, damageAfterArmour, type Hittable } from './combat';
 import { Inventory } from './inventory';
 import { QuestLog } from './quests';
 
@@ -59,6 +63,9 @@ export interface GameplayDeps {
   terrain: TerrainData;
   village: Village | undefined;
   npcs: Npcs | undefined;
+  bees: BeeSwarms | undefined;
+  caps: MoonCaps | undefined;
+  audio: Ambience;
   save: SaveStore;
   /** Parts of the world that exist in this build; gates which quests are offered. */
   content: string[];
@@ -89,8 +96,12 @@ export class Gameplay {
   private placeTimer = 0;
   private saveTimer = 0;
   private dirty = false;
-  private rest: { t: number; until: number; done: boolean } | null = null;
+  private rest: { t: number; until: number; done: boolean; fainted: boolean } | null = null;
   private target: Target | null = null;
+  readonly combat = new Combat();
+  private readonly targets: Hittable[] = [];
+  private readonly chestPos = new THREE.Vector3();
+  private readonly capPos = new THREE.Vector3();
 
   constructor(readonly d: GameplayDeps) {
     this.hud = new Hud(d.ui);
@@ -111,6 +122,18 @@ export class Gameplay {
       this.dirty = true;
     };
     this.quests.onReady = (q) => this.hud.toast(`${q.title}: done. Return for your reward.`, 'quest');
+
+    this.combat.onSwing = () => d.audio.sfx('swing');
+    this.combat.onHit = () => d.audio.sfx('hit');
+    if (d.bees) {
+      this.targets.push(...d.bees.targets);
+      d.bees.onSting = () => this.hurt(1);
+      d.bees.onKilled = () => {
+        this.hud.toast('The swarm scatters.');
+        this.quests.notify({ type: 'kill', target: 'bee_swarm' });
+        if (Math.random() < 0.6) this.give('honeycomb');
+      };
+    }
 
     // Every bed in the village, in world space.
     for (const b of BUILDINGS) {
@@ -143,7 +166,18 @@ export class Gameplay {
     this.flags = {};
     this.health = this.maxHealth;
     this.playtime = 0;
+    this.syncWorld();
     this.refreshTracker();
+  }
+
+  /** Bring the world's pick-ups in line with the saved flags. */
+  private syncWorld(): void {
+    const caps = this.d.caps;
+    if (!caps) return;
+    caps.pickedDay.forEach((_, i) => {
+      caps.pickedDay[i] = this.flags[`cap:${i}`] !== undefined ? this.flags[`cap:${i}`]! : -1;
+    });
+    caps.sync(this.d.clock.day);
   }
 
   /** Restore a saved game. Returns false if the data could not be used. */
@@ -158,6 +192,7 @@ export class Gameplay {
       this.health = Math.max(1, Math.min(this.maxHealth, save.player.health));
       this.playtime = save.playtime;
       d.player.teleport(save.player.x, save.player.z, (save.player.yaw * 180) / Math.PI, (save.player.pitch * 180) / Math.PI, save.player.y);
+      this.syncWorld();
       this.refreshTracker();
       this.dirty = false;
       return true;
@@ -200,6 +235,22 @@ export class Gameplay {
     if (this.health >= this.maxHealth) return;
     const heal = this.inventory.consumeFromSlot(slot);
     if (heal > 0) this.health = Math.min(this.maxHealth, this.health + heal);
+  }
+
+  /** The player is hurt. Worn gear soaks some of it. */
+  hurt(amount: number): void {
+    if (this.mode === 'rest' || this.health <= 0) return;
+    this.health -= damageAfterArmour(amount, this.inventory.defense());
+    this.hud.flashHurt();
+    this.d.audio.sfx('hurt');
+    if (this.health <= 0) {
+      // Not death: you come round in your own bed the next morning, with nothing lost.
+      this.health = 0;
+      this.hud.hideDialogue();
+      this.pages = [];
+      this.rest = { t: 0, until: MORNING, done: false, fainted: true };
+      this.mode = 'rest';
+    }
   }
 
   // ---------- Pack screen ----------
@@ -291,8 +342,68 @@ export class Gameplay {
       return;
     }
     const lines = this.d.clock.isNight && def.nightLines ? def.nightLines : def.lines;
-    this.say([page(lines[npc.lineIndex % lines.length]!)]);
+    const pages = [page(lines[npc.lineIndex % lines.length]!)];
     npc.lineIndex++;
+    if (def.shop) pages.push(this.shopPage(def));
+    this.say(pages);
+  }
+
+  // ---------- Trading ----------
+
+  private shopPage(def: NpcDef): Page {
+    const page = (text: string, extra: Partial<Page> = {}): Page => ({ speaker: def.name, role: def.title, text, ...extra });
+    const inv = this.inventory;
+    const shop = def.shop!;
+    const back = () => this.pages.unshift(this.shopPage(def));
+    const buying = (): Page => {
+      const choices = Object.entries(shop.sells)
+        .slice(0, 3)
+        .map(([id, price]) => ({
+          label: `${item(id).name} — ${price} coins`,
+          run: () => {
+            if (inv.coins < price) this.pages.unshift(page('You have not the coin for that.', { after: back }));
+            else if (inv.add(id, 1) > 0) this.pages.unshift(page('Your pack is full.', { after: back }));
+            else {
+              inv.addCoins(-price);
+              this.d.audio.sfx('coin');
+              this.hud.toast(`+ ${item(id).name}`, 'item');
+              this.pages.unshift(buying());
+            }
+          },
+        }));
+      choices.push({ label: 'That is all.', run: back });
+      return page(`You have ${inv.coins} coins.`, { choices });
+    };
+    const selling = (): Page => {
+      const wanted = Object.entries(shop.buys)
+        .filter(([id]) => inv.slots.some((s) => s?.id === id))
+        .slice(0, 3);
+      if (wanted.length === 0) return page('You have nothing I am after.', { after: back });
+      const choices = wanted.map(([id, price]) => {
+        let n = 0;
+        for (const st of inv.slots) if (st?.id === id) n += st.count;
+        return {
+          label: `${item(id).name} ×${n} — ${price * n} coins`,
+          run: () => {
+            if (inv.remove(id, n)) {
+              inv.addCoins(price * n);
+              this.d.audio.sfx('coin');
+              this.hud.toast(`+ ${price * n} coins`, 'item');
+            }
+            this.pages.unshift(selling());
+          },
+        };
+      });
+      choices.push({ label: 'That is all.', run: back });
+      return page('What will you part with?', { choices });
+    };
+    return page('Anything you need?', {
+      choices: [
+        { label: 'Show me what you sell.', run: () => this.pages.unshift(buying()) },
+        { label: 'I have things to sell.', run: () => this.pages.unshift(selling()) },
+        { label: 'Nothing today.', run: () => {} },
+      ],
+    });
   }
 
   private completeQuest(quest: QuestDef): void {
@@ -307,7 +418,7 @@ export class Gameplay {
 
   private offerRest(): void {
     const start = (until: number) => {
-      this.rest = { t: 0, until, done: false };
+      this.rest = { t: 0, until, done: false, fainted: false };
       this.mode = 'rest';
     };
     this.say([
@@ -338,6 +449,13 @@ export class Gameplay {
         r.done = true;
         this.d.clock.restUntil(r.until);
         this.health = this.maxHealth;
+        if (r.fainted) {
+          // Carried home: wake standing beside your own bed.
+          const cottage = BUILDING_BY_ID.cottage!;
+          const p = toWorld(cottage, 0.9, -0.6);
+          this.d.player.teleport(p.x, p.z, 180 - (cottage.yaw * 180) / Math.PI + 90, 0);
+        }
+        this.syncWorld();
       }
     } else if (r.t < FADE * 2 + HOLD) {
       this.hud.setFade(1 - (r.t - FADE - HOLD) / FADE);
@@ -345,7 +463,7 @@ export class Gameplay {
       this.hud.setFade(0);
       this.rest = null;
       this.mode = 'play';
-      this.hud.toast(r.until === MORNING ? 'You wake with the morning.' : 'You wake as night falls.');
+      this.hud.toast(r.fainted ? 'You wake in your own bed, sore but whole. Someone carried you home.' : r.until === MORNING ? 'You wake with the morning.' : 'You wake as night falls.');
       this.saveNow();
     }
   }
@@ -383,7 +501,24 @@ export class Gameplay {
       if (!OWN_BEDS.has(bed.id)) continue;
       consider(bed.pos, REACH, 0.3, () => ({ prompt: 'Rest', act: () => this.offerRest() }));
     }
+    const caps = d.caps;
+    if (caps) {
+      const day = d.clock.day;
+      caps.spots.forEach((spot, i) => {
+        if (!caps.available(i, day)) return;
+        this.capPos.set(spot.x, spot.y + 0.08, spot.z);
+        consider(this.capPos, REACH + 0.2, 0.6, () => ({ prompt: 'Pick Moonlight Cap', act: () => this.pickCap(i) }));
+      });
+    }
     return best;
+  }
+
+  private pickCap(i: number): void {
+    const caps = this.d.caps;
+    if (!caps || !caps.pick(i, this.d.clock.day)) return;
+    this.flags[`cap:${i}`] = this.d.clock.day;
+    this.d.audio.sfx('pick');
+    this.give('moon_cap');
   }
 
   private useDoor(door: Door): void {
@@ -417,6 +552,21 @@ export class Gameplay {
       else this.openMenu();
     }
 
+    // The meadow's creatures carry on while walking and talking, not while the pack is open.
+    const f = d.player.feet;
+    this.chestPos.set(f.x, f.y + 1.2, f.z);
+    if (this.mode !== 'menu' && d.bees) {
+      d.bees.update(dt, this.playtime, d.clock.day, this.chestPos);
+      const near = d.bees.nearest(this.chestPos);
+      if (near) {
+        const dx = near.swarm.position.x - f.x;
+        const dz = near.swarm.position.z - f.z;
+        const l = Math.hypot(dx, dz) || 1;
+        const pan = (dx * Math.cos(d.player.yaw) + dz * Math.sin(d.player.yaw)) / l;
+        d.audio.setBuzz(Math.pow(Math.max(0, 1 - near.distance / 18), 1.5), pan * Math.min(1, near.distance / 3));
+      } else d.audio.setBuzz(0, 0);
+    }
+
     if (this.mode === 'dialogue') {
       if (input.wasPressed('choice1')) this.advance(0);
       else if (input.wasPressed('choice2')) this.advance(1);
@@ -432,11 +582,13 @@ export class Gameplay {
     this.hud.setPrompt(this.target ? this.target.prompt : null);
     if (this.target && input.wasPressed('interact')) this.target.act();
 
+    d.camera.getWorldDirection(this.fwd);
+    this.combat.update(dt, input.isDown('attack'), this.inventory.weapon(), d.player.eye, this.fwd, this.targets);
+
     // Arriving at named places.
     this.placeTimer -= dt;
     if (this.placeTimer <= 0) {
       this.placeTimer = 0.3;
-      const f = d.player.feet;
       for (const place of PLACES) {
         if (Math.hypot(f.x - place.x, f.z - place.z) > place.radius) continue;
         const key = `place:${place.id}`;

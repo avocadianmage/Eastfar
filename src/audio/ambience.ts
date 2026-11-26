@@ -77,6 +77,8 @@ export class Ambience {
   private creekGain!: GainNode;
   private creekPan!: StereoPannerNode;
   private cricketGain!: GainNode;
+  private buzzGain!: GainNode;
+  private buzzPan!: StereoPannerNode;
   private birdTimer = 2;
   private owlTimer = 20;
   private white!: AudioBuffer;
@@ -159,6 +161,30 @@ export class Ambience {
         .connect(f)
         .connect(g)
         .connect(this.creekGain);
+    }
+
+    // Bees: two reedy tones with a fast wobble, silent until a swarm is near.
+    this.buzzGain = ctx.createGain();
+    this.buzzGain.gain.value = 0;
+    this.buzzPan = ctx.createStereoPanner();
+    const buzzFilter = ctx.createBiquadFilter();
+    buzzFilter.type = 'bandpass';
+    buzzFilter.frequency.value = 420;
+    buzzFilter.Q.value = 0.9;
+    buzzFilter.connect(this.buzzGain).connect(this.buzzPan).connect(this.master);
+    const wobble = ctx.createOscillator();
+    wobble.frequency.value = 23;
+    const wobbleDepth = ctx.createGain();
+    wobbleDepth.gain.value = 14;
+    wobble.connect(wobbleDepth);
+    wobble.start();
+    for (const f of [186, 279]) {
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = f;
+      wobbleDepth.connect(o.frequency);
+      o.connect(buzzFilter);
+      o.start();
     }
 
     // Crickets: three singers at slightly different pitches and tempos.
@@ -301,6 +327,60 @@ export class Ambience {
     g.gain.exponentialRampToValueAtTime(0.001, t + len);
     src.connect(f).connect(g).connect(this.master);
     src.start(t, Math.random() * 2, len + 0.05);
+  }
+
+  /** How loud the bees are (0..1) and which side they are on. */
+  setBuzz(level: number, pan: number): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    this.buzzGain.gain.setTargetAtTime(Math.max(0, Math.min(1, level)) * 0.11, ctx.currentTime, 0.12);
+    this.buzzPan.pan.setTargetAtTime(Math.max(-1, Math.min(1, pan)) * 0.8, ctx.currentTime, 0.12);
+  }
+
+  /** Short one-off sounds. */
+  sfx(kind: 'swing' | 'hit' | 'hurt' | 'pick' | 'coin'): void {
+    const ctx = this.ctx;
+    if (!ctx || this.muted) return;
+    const t = ctx.currentTime;
+    const tone = (type: OscillatorType, f0: number, f1: number, len: number, peak: number, delay = 0) => {
+      const o = ctx.createOscillator();
+      o.type = type;
+      o.frequency.setValueAtTime(f0, t + delay);
+      o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + delay + len);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, t + delay);
+      g.gain.linearRampToValueAtTime(peak, t + delay + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.001, t + delay + len);
+      o.connect(g).connect(this.master);
+      o.start(t + delay);
+      o.stop(t + delay + len + 0.03);
+    };
+    if (kind === 'swing') {
+      // A whoosh: noise swept upward.
+      const src = ctx.createBufferSource();
+      src.buffer = this.white;
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass';
+      f.Q.value = 1.2;
+      f.frequency.setValueAtTime(500, t);
+      f.frequency.exponentialRampToValueAtTime(2200, t + 0.13);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.09, t + 0.04);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+      src.connect(f).connect(g).connect(this.master);
+      src.start(t, Math.random() * 2, 0.2);
+    } else if (kind === 'hit') {
+      tone('sine', 150, 60, 0.11, 0.3);
+      tone('triangle', 900, 300, 0.04, 0.08);
+    } else if (kind === 'hurt') {
+      tone('square', 520, 300, 0.12, 0.07);
+    } else if (kind === 'pick') {
+      tone('sine', 780, 1240, 0.12, 0.1);
+    } else {
+      tone('sine', 1568, 1568, 0.09, 0.08);
+      tone('sine', 2093, 2093, 0.14, 0.08, 0.07);
+    }
   }
 
   toggleMute(): boolean {

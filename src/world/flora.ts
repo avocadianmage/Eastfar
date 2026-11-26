@@ -187,3 +187,54 @@ export function placeRocks(t: TerrainData): RockSet {
     seed: Float32Array.from(seeds),
   };
 }
+
+export interface Spot {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/**
+ * Where Moonlight Caps grow: in the damp along the creek's banks and at the
+ * feet of trees, all within Aleric's Meadow.
+ */
+export function placeMoonCaps(t: TerrainData, trees: TreeSet, count = 28): Spot[] {
+  const MEADOW_X = 40;
+  const MEADOW_Z = -330;
+  const MEADOW_R = 195;
+  const candidates: Spot[] = [];
+  const ok = (x: number, z: number) => Math.hypot(x - MEADOW_X, z - MEADOW_Z) < MEADOW_R && playableSdf(x, z) < -4 && pathSdf(x, z) > 1.5;
+
+  // Along the creek, a few steps back from the water on alternating banks.
+  for (let i = 0; i < t.creek.length; i += 7) {
+    const p = t.creek[i]!;
+    const side = hash2(i, 0, WORLD_SEED + 60) < 0.5 ? -1 : 1;
+    const off = side * (p.width / 2 + 1.4 + 2.6 * hash2(i, 1, WORLD_SEED + 61));
+    const x = p.x - p.tz * off;
+    const z = p.z + p.tx * off;
+    if (ok(x, z)) candidates.push({ x, y: 0, z });
+  }
+  // At the feet of meadow trees.
+  for (let i = 0; i < trees.count; i += 3) {
+    const tx = trees.x[i]!;
+    const tz = trees.z[i]!;
+    if (Math.hypot(tx - MEADOW_X, tz - MEADOW_Z) > MEADOW_R - 15) continue;
+    const a = hash2(i, 2, WORLD_SEED + 62) * Math.PI * 2;
+    const r = 1.1 + hash2(i, 3, WORLD_SEED + 63) * 0.9;
+    const x = tx + Math.cos(a) * r;
+    const z = tz + Math.sin(a) * r;
+    if (ok(x, z)) candidates.push({ x, y: 0, z });
+  }
+
+  // Take them in a shuffled order, keeping each a few strides from the last ones chosen.
+  const order = candidates.map((_, i) => i).sort((a, b) => hash2(a, 9, WORLD_SEED + 64) - hash2(b, 9, WORLD_SEED + 64));
+  const out: Spot[] = [];
+  for (const i of order) {
+    const c = candidates[i]!;
+    if (out.some((o) => Math.hypot(o.x - c.x, o.z - c.z) < 9)) continue;
+    c.y = heightAt(t, c.x, c.z);
+    out.push(c);
+    if (out.length >= count) break;
+  }
+  return out;
+}

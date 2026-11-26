@@ -37,6 +37,8 @@ export interface NpcDef {
   lines: string[];
   /** Things they say at night instead, if any. */
   nightLines?: string[];
+  /** What they trade in, if anything: item id to price in coins. */
+  shop?: { sells: Record<string, number>; buys: Record<string, number> };
 }
 
 export const NPCS: readonly NpcDef[] = [
@@ -97,6 +99,7 @@ export const NPCS: readonly NpcDef[] = [
       'A good edge is patience and a bad one is hurry. Same as most things.',
       'If you are heading past the farms, take something heavier than your fists.',
     ],
+    shop: { sells: { sword: 60, lantern: 25, cloak: 30 }, buys: { sickle: 7, stick: 1, crow_feather: 1 } },
   },
   {
     id: 'innkeeper',
@@ -112,6 +115,7 @@ export const NPCS: readonly NpcDef[] = [
       'The Lantern and Loaf. My grandmother named it. There was a lantern, once.',
       'Travellers used to come from the east. Then they stopped. Nobody ever said why.',
     ],
+    shop: { sells: { bread: 3, apple: 2 }, buys: { honeycomb: 6, apple: 1, straw: 1 } },
   },
   {
     id: 'child',

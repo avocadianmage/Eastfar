@@ -7,7 +7,7 @@
 | 0 | Foundation | Done |
 | 1 | A walk in the meadow | Built; awaiting sign-off on look and frame time on a real GPU |
 | 2 | The Quiet Village | Built: roads, bridge, eight enterable buildings, six villagers with day/night routines, dialogue, quests, pack and journal, resting, saving. One quest (The Old Legend) is playable start to finish; the others are offered as their content arrives in milestones 3 and 4 |
-| 3 | Meadow content | Not started |
+| 3 | Meadow content | Built: combat with a first-person arm and weapons, five bee swarms, Moonlight Caps that glow at night, butterflies, fainting, and trading with the blacksmith and innkeeper. The elder's, beekeeper's and herbalist's quests are playable start to finish |
 | 4 | The Farms | Not started |
 | 5 | Polish and ship | Not started |
 
@@ -29,6 +29,15 @@ Decisions made while building milestone 2:
 - **Quests are gated on content:** each quest names the part of the world it needs (bees, mushrooms, crows, scarecrows) and is only offered once that part exists.
 - **Saving:** automatic, every 30 seconds and shortly after anything changes, when resting, and when the tab is hidden or the game is paused. A saved game shows "Continue" with a "Start a new game" option.
 - **Dialogue is keyboard-driven** (E to continue, number keys to choose) so the mouse stays captured; the pack screen (Tab) releases the mouse and pauses time.
+
+Decisions made while building milestone 3:
+
+- **Combat:** hold or click the mouse to swing. The blow lands about a third of the way through the swing on the nearest target within reach and roughly 38° of straight ahead. Fists do 1 damage; stick 2, sickle 3, sword 5.
+- **Bee swarms:** five hives in the meadow. A swarm notices the player at 9 m, chases at 4.6 m/s (sprinting outruns it), gives up 28 m from home, stings for 1 every 0.9 s, and breaks up after 4 damage. Broken swarms re-form the next day. Each has a 60% chance to leave honeycomb.
+- **Health and fainting:** 10 health. Worn gear soaks damage but a hit always costs at least half a point. At zero the player faints and wakes the next morning in their own bed with nothing lost.
+- **Moonlight Caps:** 28 clusters along the creek banks and under meadow trees. Subtle by day; they glow strongly at night. A picked cluster grows back two days later.
+- **Trading** runs through the dialogue box: Bram sells the sword (60), lantern (25) and cloak (30); Hesta sells bread and apples and pays 6 for honeycomb.
+- **Wildlife so far:** butterflies by day, fireflies by night. Songbirds and fish are left for milestone 5.
 
 ## Context
 
