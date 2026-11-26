@@ -89,6 +89,8 @@ export class Gameplay {
   readonly hud: Hud;
   readonly screen: InventoryScreen;
   mode: Mode = 'play';
+  /** The villager now being spoken with, who gestures as they talk. */
+  private talkingTo: Npc | null = null;
   health = 10;
   maxHealth = 10;
   /** One-off world facts (places found, things picked up). */
@@ -335,6 +337,8 @@ export class Gameplay {
 
   private talkTo(npc: Npc): void {
     const def = npc.def;
+    this.talkingTo = npc;
+    npc.talking = true;
     const q = this.quests;
     q.notify({ type: 'talk', npc: def.id });
     const page = (text: string, extra: Partial<Page> = {}): Page => ({ speaker: def.name, role: def.title, text, ...extra });
@@ -581,6 +585,10 @@ export class Gameplay {
 
   /** @param active true while the game is running (not paused behind the title or pause screen). */
   update(dt: number, active: boolean): void {
+    if (this.talkingTo && this.mode !== 'dialogue') {
+      this.talkingTo.talking = false;
+      this.talkingTo = null;
+    }
     const d = this.d;
     const input = d.input;
     this.hud.setVisible(active || this.mode === 'menu');

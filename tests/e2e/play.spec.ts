@@ -113,6 +113,38 @@ test('resting in your own bed passes the time', async ({ page }) => {
   expect(s.day).toBe(0);
 });
 
+test('villagers are animated and gesture while they talk', async ({ page }) => {
+  await boot(page, 'time=10:00');
+  await api(page, 'api.teleport(5.6, -1.6, 61, -5);');
+  await frames(page, 4);
+  type Fig = { clip: string; time: number; lod: number; triangles: number };
+  const before = await api<Fig>(page, 'return api.npc("elder");');
+  expect(before.clip).toBe('Idle_Loop');
+  expect(before.lod).toBe(0);
+  expect(before.triangles).toBeGreaterThan(5000);
+  await frames(page, 6);
+  const later = await api<Fig>(page, 'return api.npc("elder");');
+  expect(later.time).not.toBe(before.time);
+
+  expect(await api<string>(page, 'return api.interact();')).toBe('Talk to Maelin');
+  await frames(page, 3);
+  expect((await api<Fig>(page, 'return api.npc("elder");')).clip).toBe('Idle_Talking_Loop');
+  // See the conversation out; she goes back to standing about.
+  for (let i = 0; i < 16 && (await api<string>(page, 'return api.mode();')) === 'dialogue'; i++) {
+    // Continue a plain page, or take the first reply where there is a choice.
+    await api(page, 'api.choose(null); api.choose(0);');
+  }
+  await frames(page, 3);
+  expect((await api<Fig>(page, 'return api.npc("elder");')).clip).toBe('Idle_Loop');
+
+  // From across the square she is drawn with far fewer triangles.
+  await api(page, 'api.teleport(-22, 14, 60, 0);');
+  await frames(page, 3);
+  const far = await api<Fig>(page, 'return api.npc("elder");');
+  expect(far.lod).toBeGreaterThan(0);
+  expect(far.triangles).toBeLessThan(before.triangles / 2);
+});
+
 test('villagers go indoors at night', async ({ page }) => {
   await boot(page, 'time=12:00');
   const day = await api<{ x: number; z: number; night: boolean }>(page, 'return api.npc("elder");');

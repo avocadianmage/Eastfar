@@ -10,6 +10,7 @@
 | 3 | Meadow content | Built: combat with a first-person arm and weapons, five bee swarms, Moonlight Caps that glow at night, butterflies, fainting, and trading with the blacksmith and innkeeper. The elder's, beekeeper's and herbalist's quests are playable start to finish |
 | 4 | The Farms | Built: eight crop fields (wheat and rows of greens), two farmhouses and three barns (all enterable), ten scarecrows of which five walk at night, twelve crows, the farmers Dorrin and Marta Haywell, and the chained gate in a boundary wall at the forest's edge. Both farm quests are playable |
 | 5 | Polish and ship | Partly done: settings (graphics, volume, mouse speed, music), first-minute hints, a lantern that lights the dark, soft generative music, credits. Still open: a pass on sound once someone has listened to it, balancing from real play, songbirds and fish, and any performance work the first real-GPU measurements call for |
+| 6 | Proper models, props and recorded sound | In progress. Done: the asset pipeline, and all eight villagers as textured, animated characters (idle, talking, head following the player, work by day). To come: walking scarecrows on the same skeleton, furniture and props, first-person arms and weapons, recorded nature sounds |
 
 Decisions made while building milestones 0 and 1:
 
@@ -47,6 +48,18 @@ Decisions made while building milestone 4:
 - **Crows:** four flocks of three wheel above the wheat by day and are gone at night. One or two at a time dive at a player within about 34 m, peck for 1 and climb away; they can be hit while diving or climbing. A struck crow is back the next day.
 - **The eastern edge:** a drystone wall runs north-south at x ≈ 853 across the whole width of the farmland, with a chained timber gate where the East Road meets it. Dark conifer forest stands beyond. Looking at the gate gives a short narration; it does not open in this version.
 - **Quest order:** Dorrin offers "A Murder of Crows"; Marta offers "What Walks at Night" only after that is finished.
+
+Decisions made while bringing in proper models (milestone 6):
+
+- **Why now:** the build sandbox's network was opened, so asset sites are reachable. Milestone 2's note about code-built villagers no longer applies: they have been replaced.
+- **Only CC0 / public-domain assets**, each listed in `public/assets/CREDITS.md`. Source packs are downloaded on demand into `.cache/packs/` (git-ignored) by `tools/assets/fetch.mjs`, which reads just the needed files out of the remote zips; the small game-ready outputs in `public/assets/` are committed.
+- **Characters** come from the free tiers of Quaternius's Universal Base Characters, Modular Character Outfits – Fantasy and Universal Animation Library 1 and 2. The free tier has two adult bodies, peasant and ranger clothing in two colourways each, and six hairstyles. People are told apart by mixing parts, colourway, tint, hair, skin and build (`tools/assets/recipes.mjs`).
+- **How a character is built** (`tools/assets/build.mjs`): the head and neck are cut from the base body (the rest is hidden by clothes), hair, brows, eyes and outfit parts are added, everything is merged into one mesh on the pack's 65-bone skeleton, texture coordinates are re-pointed at one shared atlas (only the patches in use are packed), tints are baked into vertex colours, and three levels of detail are made (about 12–20k, 4–6k and 1–2k triangles). Skin and hair textures are shifted to a pale neutral base so a tint can reach any complexion or hair colour.
+- **Animations are retargeted in the build.** The packs' mannequin, the male body and the female body share one T-pose but their joints sit and point differently, so each bone's turn away from that pose is carried over in model space, per body. Result: `anims_male.glb` and `anims_female.glb`.
+- **At run time** (`src/entities/character.ts`) each figure has its own bones and animation mixer, cross-fades between clips, swaps level of detail at 13 m and 42 m, pauses animation beyond 70 m or when off-screen, and can turn its head toward a point. One material (`src/render/characterMaterial.ts`) serves everyone: atlas colour × vertex tint, lit by sun and sky, hearths and candles (`src/render/lamps.ts`) and the lantern.
+- **Villager behaviour:** stand at their day or night place as before; turn to face the player within 5.5 m; follow them with their head within 9 m; gesture while in conversation; by day, when left alone, farmers harvest and water, the herbalist tends her plants and the beekeeper checks his hives.
+- **Free-tier compromises:** there is no child body, so Pip is the female body at 0.7 scale with a larger head. There are no old faces, so the elder is marked by white hair and a hood. Straw hats are made in code (the packs have none). The paid tiers (about $40) would add noble, wizard and knight outfits, teen bodies and 20 hairstyles with no code changes.
+- **Still to do for villagers:** walking between their day and night places along the paths (needs route-finding through doors), and sitting at night (waits for the furniture pass).
 
 ## Context
 

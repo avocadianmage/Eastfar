@@ -49,7 +49,6 @@ export class Player {
   private eyeY = 0;
   private bobPhase = 0;
   private bobAmount = 0;
-  private fov = BASE_FOV;
   private airTime = 0;
   private readonly mouse = { x: 0, y: 0 };
   private readonly moved = { x: 0, y: 0, z: 0 };
@@ -190,16 +189,14 @@ export class Player {
     const bobY = Math.sin(this.bobPhase * 2) * 0.028 * this.bobAmount;
     const bobX = Math.cos(this.bobPhase) * 0.02 * this.bobAmount;
     this.eye.set(this.feet.x + cosY * bobX, this.eyeY + bobY, this.feet.z + sinY * bobX);
-
-    const fovTarget = BASE_FOV + (this.sprinting && this.speed > WALK_SPEED ? 5 : 0);
-    this.fov += (fovTarget - this.fov) * (1 - Math.exp(-6 * dt));
   }
 
   applyToCamera(camera: THREE.PerspectiveCamera): void {
     camera.position.copy(this.eye);
     camera.rotation.set(this.pitch, -this.yaw, 0, 'YXZ');
-    if (Math.abs(camera.fov - this.fov) > 0.01) {
-      camera.fov = this.fov;
+    // The view is the same width at every speed: widening it when sprinting made the world seem to lurch away.
+    if (camera.fov !== BASE_FOV) {
+      camera.fov = BASE_FOV;
       camera.updateProjectionMatrix();
     }
   }

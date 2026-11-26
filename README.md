@@ -68,6 +68,24 @@ Append to the URL, e.g. `?time=22:30&pos=40,-330&yaw=45&hud&freeze`.
 | `alt=metres` | With `fly`: start this high above the ground |
 | `autostart`, `nosave`, `offscreen` | For automated tests and screenshots |
 
+### Assets
+
+Game-ready assets live in `public/assets/` and are committed. They are built from source packs that are downloaded on demand and never committed:
+
+```bash
+npm run assets:fetch
+```
+
+```bash
+npm run assets:build
+```
+
+```bash
+npm run assets:preview -- elder="model=elder&clip=Idle_Loop&t=1&views=full:0,face:30"
+```
+
+`assets:fetch` pulls only the needed files from the packs' free tiers into `.cache/packs/`. `tools/assets/recipes.mjs` says which pieces, colours and animation clips make each character. `assets:preview` writes screenshots of a built character to `shots/assets/`.
+
 ### Screenshots
 
 ```bash
@@ -80,4 +98,6 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the design and milestone plan.
 
 ## Credits
 
-Eastfar is built with [three.js](https://threejs.org) (MIT) and the [Rapier](https://rapier.rs) physics engine (Apache-2.0). All terrain, plants, buildings, characters and sound are generated in code; there are no third-party art or audio assets.
+Eastfar is built with [three.js](https://threejs.org) (MIT) and the [Rapier](https://rapier.rs) physics engine (Apache-2.0).
+
+The people of the village and their animations come from [Quaternius](https://quaternius.com)'s public-domain (CC0) packs: Universal Base Characters, Modular Character Outfits – Fantasy, and Universal Animation Library 1 and 2. Every file and its source is listed in [public/assets/CREDITS.md](public/assets/CREDITS.md). The terrain, plants, buildings and sound are generated in code.

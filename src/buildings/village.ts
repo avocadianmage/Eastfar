@@ -4,18 +4,18 @@
  * and warm light from hearths and candles indoors. Also the bridge and the
  * well. Everything is part of the one world; there are no loading zones.
  */
-import { Fn, attribute, dot, float, length, max, mix, normalWorld, positionWorld, saturate, sin, texture, uniformArray, vec3 } from 'three/tsl';
+import { attribute, float, mix, normalWorld, positionWorld, sin, texture, vec3 } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import { BRIDGE, BUILDINGS, DOOR_HEIGHT, DOOR_WIDTH, FLOOR_RISE, toWorld, type BuildingDef } from '../world/buildings';
 import { buildingBoxes, doorInfo } from '../world/buildingLayout';
 import type { Physics } from '../world/physics';
 import type { TerrainData } from '../world/terrainData';
 import { env, lanternLight } from '../render/env';
+import { MAX_LAMPS, lampCol, lampLight, lampPos } from '../render/lamps';
 import type { WorldTextures } from '../render/textures';
 import { buildBuilding } from './kit';
 import { FACE, MeshBuilder, type FaceStyle } from './meshBuilder';
 
-const MAX_LAMPS = 4;
 const DOOR_OPEN_ANGLE = 1.85;
 const DOOR_SWING_TIME = 0.45;
 
@@ -38,15 +38,6 @@ export interface Door {
   hinge: THREE.Vector3;
 }
 
-const lampPos = uniformArray(
-  Array.from({ length: MAX_LAMPS }, () => new THREE.Vector4(0, -1000, 0, 1)),
-  'vec4',
-);
-const lampCol = uniformArray(
-  Array.from({ length: MAX_LAMPS }, () => new THREE.Vector3()),
-  'vec3',
-);
-
 /** Shared material for buildings, doors, the bridge, villagers and other made things. */
 export function builtMaterial(tex: WorldTextures): THREE.MeshLambertNodeMaterial {
   const mat = new THREE.MeshLambertNodeMaterial();
@@ -64,22 +55,10 @@ export function builtMaterial(tex: WorldTextures): THREE.MeshLambertNodeMaterial
   // and stops light creeping in where a roof meets a wall.
   mat.shadowSide = THREE.FrontSide;
 
-  mat.emissiveNode = Fn(() => {
-    // Hearths and candles light indoor surfaces; the nearest few are passed in each frame.
-    const lit = vec3(0, 0, 0).toVar();
-    for (let i = 0; i < MAX_LAMPS; i++) {
-      const lp = lampPos.element(i) as unknown as THREE.Node<'vec4'>;
-      const to = lp.xyz.sub(positionWorld);
-      const d = length(to);
-      const reach = saturate(float(1).sub(d.div(lp.w)));
-      const facing = max(dot(normalWorld, to.div(max(d, 0.01))), 0).mul(0.72).add(0.28);
-      const lc = lampCol.element(i) as unknown as THREE.Node<'vec3'>;
-      lit.addAssign(lc.mul(reach.mul(reach)).mul(facing));
-    }
-    const flicker = sin(env.time.mul(11).add(positionWorld.x.mul(9))).mul(sin(env.time.mul(17.3).add(positionWorld.y.mul(13)))).mul(0.25).add(1);
-    const flame = tint.mul(glow).mul(flicker).mul(2.6);
-    return albedo.mul(lit).mul(interior).add(flame).add(albedo.mul(lanternLight(positionWorld)));
-  })();
+  // Hearths and candles light indoor surfaces; flames flicker; the player's lantern lights whatever is near.
+  const flicker = sin(env.time.mul(11).add(positionWorld.x.mul(9))).mul(sin(env.time.mul(17.3).add(positionWorld.y.mul(13)))).mul(0.25).add(1);
+  const flame = tint.mul(glow).mul(flicker).mul(2.6);
+  mat.emissiveNode = albedo.mul(lampLight(positionWorld, normalWorld)).mul(interior).add(flame).add(albedo.mul(lanternLight(positionWorld)));
   return mat;
 }
 

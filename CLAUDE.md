@@ -9,6 +9,8 @@ Browser game: 3D first-person fantasy adventure. Three.js (`three/webgpu` + TSL 
 - `npm run test:e2e` — Playwright tests against a production build (`tests/e2e`)
 - `npm run build` — type-check and build to `dist/`
 - `node tools/probe.mjs "js expression" "query"` — evaluate JavaScript inside the running game (debug hooks are on `window.__eastfar`)
+- `npm run assets:fetch` / `npm run assets:build` — download the source packs into `.cache/packs/` (git-ignored; needs network, and `NODE_USE_ENV_PROXY=1` in this sandbox) and rebuild `public/assets/` from `tools/assets/recipes.mjs`
+- `npm run assets:preview -- name="model=elder&clip=Idle_Loop&t=1&views=full:0,face:30"` — screenshots of a built character in a bare viewer, into `shots/assets/`
 - `node tools/shots.mjs name="time=12:00&pos=x,z&yaw=deg" [--webgpu] [--size=1280x720]` — deterministic screenshots into `shots/` (run `npm run build` first)
 
 ## Conventions
@@ -20,6 +22,7 @@ Browser game: 3D first-person fantasy adventure. Three.js (`three/webgpu` + TSL 
 - Performance budget: 8.3 ms/frame at "high", ≤ 250 draw calls, ≤ 1.5 M triangles, no per-frame allocations in hot paths. Prefer GPU instancing and shader-side placement over per-object meshes.
 - Every building must be enterable with no loading zones.
 - UI is plain DOM/CSS in `src/ui`, layered over the canvas.
+- People are skinned models on one shared 65-bone skeleton (`src/entities/character.ts`), built from CC0 packs by `tools/assets/build.mjs`: one colour atlas for everyone, tints baked into vertex colours, three levels of detail, animations retargeted per body. Only CC0/public-domain assets, each listed in `public/assets/CREDITS.md`. Built outputs are committed; source packs are not.
 
 ## Verifying visuals
 

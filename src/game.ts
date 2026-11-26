@@ -2,6 +2,7 @@
  * The game: builds the world, then runs the frame loop.
  */
 import * as THREE from 'three/webgpu';
+import { loadCharacterAssets, type CharacterAssets } from './assets/loader';
 import { Ambience } from './audio/ambience';
 import { Village } from './buildings/village';
 import { GameClock } from './core/clock';
@@ -17,6 +18,7 @@ import { Npcs } from './entities/npc';
 import { createStatue } from './entities/statue';
 import { Viewmodel } from './entities/viewmodel';
 import { Gameplay } from './systems/gameplay';
+import { NPCS } from './data/npcs';
 import type { DebugParams } from './core/params';
 import { Player } from './entities/player';
 import { Butterflies } from './flora/butterflies';
@@ -26,6 +28,7 @@ import { Grass } from './flora/grass';
 import { Rocks } from './flora/rocks';
 import { TREE_FAR, Trees } from './flora/trees';
 import { placeMoonCaps } from './world/flora';
+import { characterMaterial } from './render/characterMaterial';
 import { env } from './render/env';
 import { DynamicResolution } from './render/dynamicResolution';
 import { PerfHud } from './render/perfHud';
@@ -86,6 +89,8 @@ export class Game {
   fireflies?: Fireflies;
   village?: Village;
   npcs?: Npcs;
+  figures?: CharacterAssets;
+  private figureMaterial?: THREE.Material;
   bees?: BeeSwarms;
   caps?: MoonCaps;
   scarecrows?: Scarecrows;
@@ -124,6 +129,9 @@ export class Game {
   async init(onStatus: (msg: string) => void): Promise<void> {
     onStatus('Raising the hills…');
     await nextFrame();
+    // People are downloaded while the land is being made.
+    const figures = this.params.skip.has('npcs') || this.params.skip.has('village') ? null : loadCharacterAssets([...new Set(NPCS.map((n) => n.look.model))]);
+    figures?.catch(() => {});
     this.terrain = bakeTerrain();
 
     onStatus('Lighting the sky…');
@@ -158,7 +166,11 @@ export class Game {
     if (this.village) {
       const built = this.village.material;
       createStatue(this.scene, built, this.terrain, this.physics);
-      if (!skip.has('npcs')) this.npcs = new Npcs(this.scene, built, this.terrain, this.physics, this.clock.isNight);
+      if (figures) {
+        this.figures = await figures;
+        this.figureMaterial = characterMaterial(this.figures.atlas);
+        this.npcs = new Npcs(this.scene, this.figures, this.figureMaterial, this.terrain, this.physics, this.clock.isNight);
+      }
       if (!skip.has('bees')) {
         this.bees = new BeeSwarms(this.scene, built, this.terrain);
         content.push('bees');
@@ -281,7 +293,7 @@ export class Game {
     this.trees?.update(this.camera);
     this.flowers?.update(this.camera);
     this.village?.update(dt, this.player.eye, this.player.feet, this.animTime, this.sky.tod.dayFactor);
-    this.npcs?.update(dt, this.animTime, this.clock.isNight, this.player.feet, this.camera);
+    this.npcs?.update(dt, this.clock.isNight, this.player.feet, this.camera);
     if (this.viewmodel) {
       const gp = this.gameplay;
       this.viewmodel.root.visible = !this.player.fly;
@@ -430,7 +442,7 @@ export class Game {
       save: () => this.gameplay.toSave(),
       npc: (id: string) => {
         const n = this.npcs?.byId(id);
-        return n ? { x: n.position.x, y: n.position.y, z: n.position.z, night: n.atNight } : null;
+        return n ? { x: n.position.x, y: n.position.y, z: n.position.z, night: n.atNight, clip: n.figure.clip, time: n.figure.time, lod: n.figure.levelOfDetail, triangles: n.figure.triangles } : null;
       },
       swarms: () => (this.bees?.swarms ?? []).map((b) => ({ x: b.position.x, y: b.position.y, z: b.position.z, alive: b.alive, health: b.health, state: b.state })),
       caps: () => (this.caps?.spots ?? []).map((c, i) => ({ x: c.x, z: c.z, available: this.caps!.available(i, this.clock.day) })),
