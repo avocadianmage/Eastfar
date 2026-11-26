@@ -16,6 +16,11 @@ export type Action =
   | 'inventory'
   | 'perfHud'
   | 'mute'
+  | 'confirm'
+  | 'choice1'
+  | 'choice2'
+  | 'choice3'
+  | 'choice4'
   | 'flyUp'
   | 'flyDown';
 
@@ -36,6 +41,12 @@ const KEY_BINDINGS: Record<string, Action> = {
   Backquote: 'perfHud',
   F3: 'perfHud',
   KeyM: 'mute',
+  Enter: 'confirm',
+  NumpadEnter: 'confirm',
+  Digit1: 'choice1',
+  Digit2: 'choice2',
+  Digit3: 'choice3',
+  Digit4: 'choice4',
   KeyQ: 'flyDown',
   KeyR: 'flyUp',
 };

@@ -60,36 +60,62 @@ async function boot(): Promise<void> {
     bannerTimer = window.setTimeout(() => banner.classList.remove('show'), 3800);
   };
 
-  const setPlaying = (playing: boolean) => {
-    game.playing = playing;
-    overlay.classList.toggle('hidden', playing);
-    crosshair.hidden = !playing;
+  // The game runs while the mouse is captured (or always, in automated runs). The pack
+  // screen lets go of the mouse on purpose, so that is not a pause.
+  const refresh = () => {
+    const menu = game.gameplay.mode === 'menu';
+    const running = params.autostart || game.input.locked;
+    game.playing = running || menu;
+    overlay.classList.toggle('hidden', running || menu);
+    crosshair.hidden = !running || menu;
   };
+
+  const capture = () => {
+    game.audio.start();
+    game.input.requestLock();
+    // If the browser refuses (it can, straight after Esc), fall back to the pause screen.
+    window.setTimeout(refresh, 400);
+  };
+  game.onRecapture = capture;
 
   overlay.classList.remove('loading');
   status.textContent = '';
   begin.hidden = false;
-  begin.textContent = 'Begin';
-  begin.addEventListener('click', () => {
-    game.audio.start();
-    game.input.requestLock();
-  });
+  begin.textContent = game.resumed ? 'Continue' : 'Begin';
+  begin.addEventListener('click', capture);
   canvas.addEventListener('click', () => {
-    if (!game.input.locked) {
-      game.audio.start();
-      game.input.requestLock();
-    }
+    if (!game.input.locked && game.gameplay.mode !== 'menu') capture();
   });
   game.input.onLockChange = (locked) => {
-    setPlaying(locked);
-    if (!locked) begin.textContent = 'Resume';
+    refresh();
+    if (!locked && game.gameplay.mode !== 'menu') {
+      begin.textContent = 'Resume';
+      game.gameplay.saveNow();
+    }
   };
 
-  game.start();
-  if (params.autostart) {
-    overlay.style.transition = 'none';
-    setPlaying(true);
+  if (game.resumed) {
+    // Offer a fresh start to anyone with a saved game.
+    const fresh = document.createElement('button');
+    fresh.className = 'new-game';
+    fresh.textContent = 'Start a new game';
+    fresh.addEventListener('click', () => {
+      if (fresh.dataset.armed !== '1') {
+        fresh.dataset.armed = '1';
+        fresh.textContent = 'Erase your saved game and start over? Click again to confirm.';
+        return;
+      }
+      game.gameplay.newGame();
+      game.gameplay.saveNow();
+      fresh.remove();
+      begin.textContent = 'Begin';
+    });
+    begin.insertAdjacentElement('afterend', fresh);
   }
+
+  game.start();
+  if (params.autostart) overlay.style.transition = 'none';
+  refresh();
   window.__eastfar = game.debugApi();
 }
 

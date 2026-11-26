@@ -6,6 +6,10 @@ import { Ambience } from './audio/ambience';
 import { Village } from './buildings/village';
 import { GameClock } from './core/clock';
 import { Input, type Action } from './core/input';
+import { SaveStore } from './core/save';
+import { Npcs } from './entities/npc';
+import { createStatue } from './entities/statue';
+import { Gameplay } from './systems/gameplay';
 import type { DebugParams } from './core/params';
 import { Player } from './entities/player';
 import { Fireflies } from './flora/fireflies';
@@ -23,8 +27,9 @@ import { Sky } from './render/sky';
 import { TerrainMesh } from './render/terrain';
 import { createWorldTextures, type WorldTextures } from './render/textures';
 import { CreekWater } from './water/creek';
-import { REGION_LABELS, SPAWN, regionAt, type RegionName } from './world/layout';
+import { REGION_LABELS, regionAt, type RegionName } from './world/layout';
 import { Physics } from './world/physics';
+import { buildingAt } from './world/buildings';
 import { MASK2_FOREST, MASK_GRASS, bakeTerrain, creekDistanceAt, heightAt, mask2At, maskAt, type TerrainData } from './world/terrainData';
 
 export interface GameState {
@@ -69,6 +74,10 @@ export class Game {
   rocks?: Rocks;
   fireflies?: Fireflies;
   village?: Village;
+  npcs?: Npcs;
+  gameplay!: Gameplay;
+  /** True if a saved game was found and loaded at start-up. */
+  resumed = false;
   post!: Post;
   private dynRes!: DynamicResolution;
 
@@ -82,7 +91,7 @@ export class Game {
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
-    ui: HTMLElement,
+    private readonly ui: HTMLElement,
     readonly params: DebugParams,
   ) {
     this.quality = QUALITY[loadQualityName(params.quality)];
@@ -123,13 +132,42 @@ export class Game {
     this.player.onFootstep = (strength) => this.audio.step(this.player.wading > 0.06 ? 'water' : 'grass', strength);
     this.player.onLand = (impact) => this.audio.step(this.player.wading > 0.06 ? 'water' : 'land', impact);
 
+    if (this.village) {
+      createStatue(this.scene, this.village.material, this.terrain, this.physics);
+      if (!skip.has('npcs')) this.npcs = new Npcs(this.scene, this.village.material, this.terrain, this.physics, this.clock.isNight);
+    }
+
     const p = this.params;
-    const [sx, sz] = p.pos ?? [SPAWN.x, SPAWN.z];
-    this.player.teleport(sx, sz, p.yaw ?? SPAWN.yawDeg, p.pitch ?? 0);
+    this.gameplay = new Gameplay({
+      clock: this.clock,
+      input: this.input,
+      player: this.player,
+      camera: this.camera,
+      terrain: this.terrain,
+      village: this.village,
+      npcs: this.npcs,
+      save: SaveStore.browser(p.nosave),
+      // Parts of the world that exist so far; quests needing others are not yet offered.
+      content: [],
+      ui: this.ui,
+      recapture: () => this.onRecapture(),
+      release: () => this.input.releaseLock(),
+    });
+
+    // A saved game picks up where it left off; otherwise this is a new game.
+    const saved = this.gameplay.d.save.load();
+    this.gameplay.newGame();
+    if (saved) this.resumed = this.gameplay.loadFrom(saved);
+
+    // Debug parameters override wherever the save or new game put things.
+    if (p.pos || p.yaw !== undefined || p.pitch !== undefined) {
+      const [sx, sz] = p.pos ?? [this.player.feet.x, this.player.feet.z];
+      this.player.teleport(sx, sz, p.yaw ?? (this.player.yaw * 180) / Math.PI, p.pitch ?? 0);
+    }
     if (p.fly && p.alt) this.player.feet.y += p.alt;
     if (p.time !== undefined) this.clock.setHour(p.time);
     this.clock.frozen = p.freeze;
-    this.region = regionAt(sx, sz);
+    this.region = regionAt(this.player.feet.x, this.player.feet.z);
 
     this.hud.extra = () => {
       const f = this.player.feet;
@@ -161,7 +199,9 @@ export class Game {
       const dt = Math.min(frameMs / 1000, 0.05);
       const t0 = performance.now();
       // The clock follows real time even when frames are slow; movement uses the capped step.
-      if (this.playing) this.clock.advance(Math.min(frameMs / 1000, 1));
+      // Time passes while walking and talking, not in the pack screen or mid-rest.
+      const mode = this.gameplay.mode;
+      if (this.playing && (mode === 'play' || mode === 'dialogue')) this.clock.advance(Math.min(frameMs / 1000, 1));
       this.update(dt);
       this.render();
       const cpuMs = performance.now() - t0;
@@ -181,7 +221,8 @@ export class Game {
     if (input.wasPressed('perfHud')) this.hud.toggle();
 
     if (this.playing) this.animTime += dt;
-    this.player.update(dt, input, this.playing);
+    this.gameplay.update(dt, this.playing);
+    this.player.update(dt, input, this.playing && this.gameplay.mode === 'play');
     this.physics.step(dt);
     this.player.applyToCamera(this.camera);
     this.camera.updateMatrixWorld();
@@ -189,6 +230,7 @@ export class Game {
     this.trees?.update(this.camera);
     this.flowers?.update(this.camera);
     this.village?.update(dt, this.player.eye, this.player.feet, this.animTime, this.sky.tod.dayFactor);
+    this.npcs?.update(dt, this.animTime, this.clock.isNight, this.player.feet, this.camera);
 
     const feet = this.player.feet;
     const eye = this.player.eye;
@@ -242,6 +284,9 @@ export class Game {
     this.camera.aspect = window.innerWidth / Math.max(1, window.innerHeight);
     this.camera.updateProjectionMatrix();
   }
+
+  /** Overridable hook: the pack screen closed and the mouse should be captured again. */
+  onRecapture: () => void = () => this.input.requestLock();
 
   /** Overridable hook: the player crossed into another named area. */
   onRegionChange: (region: RegionName) => void = () => {};
@@ -304,6 +349,23 @@ export class Game {
         return best < 0 ? null : { x: s.x[best]!, y: s.y[best]!, z: s.z[best]!, kind: s.kind[best]!, scale: s.scale[best]!, dist: bd };
       },
       treeCounts: () => this.trees?.counts() ?? [0, 0, 0],
+      /** Act on whatever the player is looking at; returns the prompt shown, or null. */
+      interact: () => this.gameplay.interact(),
+      dialogue: () => this.gameplay.dialogueText(),
+      choose: (choice: number | null) => this.gameplay.choose(choice),
+      mode: () => this.gameplay.mode,
+      give: (id: string, count = 1) => this.gameplay.give(id, count),
+      count: (id: string) => this.gameplay.inventory.count(id),
+      coins: () => this.gameplay.inventory.coins,
+      questStatus: (id: string) => this.gameplay.quests.status(id),
+      health: () => this.gameplay.health,
+      /** Id of the building the player is standing in, if any. */
+      inside: () => buildingAt(this.player.feet.x, this.player.feet.z)?.id ?? null,
+      save: () => this.gameplay.toSave(),
+      npc: (id: string) => {
+        const n = this.npcs?.byId(id);
+        return n ? { x: n.position.x, y: n.position.y, z: n.position.z, night: n.atNight } : null;
+      },
       /** Open or close every door (for screenshots and tests). */
       setDoors: (open: boolean) => {
         for (const d of this.village?.doors ?? []) if (d.open !== open) this.village!.toggleDoor(d);

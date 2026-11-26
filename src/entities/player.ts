@@ -58,10 +58,12 @@ export class Player {
   ) {}
 
   /** Put the player on the ground at a position. */
-  teleport(x: number, z: number, yawDeg?: number, pitchDeg?: number): void {
+  teleport(x: number, z: number, yawDeg?: number, pitchDeg?: number, nearY?: number): void {
     // Stand on whatever is there: a floor or bridge deck if one is just above the ground.
+    // `nearY` picks the right storey when restoring a saved position upstairs.
     const ground = heightAt(this.terrain, x, z);
-    const y = this.physics.groundBelow(x, ground + 2.3, z, 6) ?? ground;
+    const from = nearY !== undefined ? Math.max(ground, nearY) + 1.2 : ground + 2.3;
+    const y = this.physics.groundBelow(x, from, z, 8) ?? ground;
     this.feet.set(x, y, z);
     this.physics.teleportFeet(x, y, z);
     this.velocity.set(0, 0, 0);

@@ -28,6 +28,11 @@ export class QuestLog {
   onChange: () => void = () => {};
   /** Called when a quest's objectives are all met. */
   onReady: (quest: QuestDef) => void = () => {};
+  /**
+   * Parts of the world that exist in this build ('bees', 'crows'...). A quest that
+   * needs a part not listed here is not offered. Null means everything is available.
+   */
+  content: Set<string> | null = null;
 
   status(id: string): QuestStatus | 'unstarted' {
     return this.state[id]?.status ?? 'unstarted';
@@ -39,7 +44,9 @@ export class QuestLog {
 
   /** Quests an NPC would offer right now. */
   offersFrom(npc: string): QuestDef[] {
-    return QUESTS.filter((q) => q.giver === npc && !this.state[q.id] && (q.requires ?? []).every((r) => this.isDone(r)));
+    return QUESTS.filter(
+      (q) => q.giver === npc && !this.state[q.id] && (q.requires ?? []).every((r) => this.isDone(r)) && (!q.needs || this.content === null || this.content.has(q.needs)),
+    );
   }
 
   /** Quests an NPC can complete right now. */

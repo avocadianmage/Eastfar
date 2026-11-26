@@ -47,8 +47,8 @@ const lampCol = uniformArray(
   'vec3',
 );
 
-/** Shared material for buildings, doors, the bridge and other built things. */
-function builtMaterial(tex: WorldTextures): THREE.MeshLambertNodeMaterial {
+/** Shared material for buildings, doors, the bridge, villagers and other made things. */
+export function builtMaterial(tex: WorldTextures): THREE.MeshLambertNodeMaterial {
   const mat = new THREE.MeshLambertNodeMaterial();
   const tint = attribute('color', 'vec3');
   const interior = attribute('aInterior', 'float');
@@ -124,6 +124,8 @@ function doorGeometry(): THREE.BufferGeometry {
 export class Village {
   readonly doors: Door[] = [];
   readonly meshes: THREE.Mesh[] = [];
+  /** The shared material, for other things that should be lit the same way (villagers, props). */
+  readonly material: THREE.MeshLambertNodeMaterial;
   private readonly lamps: LampState[] = [];
   private readonly doorMesh: THREE.InstancedMesh;
   private readonly buildingMatrix = new Map<string, THREE.Matrix4>();
@@ -138,6 +140,7 @@ export class Village {
     private readonly physics: Physics | null,
   ) {
     const mat = builtMaterial(tex);
+    this.material = mat;
     const glassPos: number[] = [];
     const glassOutside: number[] = [];
     let triangles = 0;

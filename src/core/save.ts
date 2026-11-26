@@ -15,7 +15,7 @@ export interface SaveData {
   /** Real seconds played. */
   playtime: number;
   clock: ClockState;
-  player: { x: number; z: number; yaw: number; pitch: number; health: number };
+  player: { x: number; y?: number; z: number; yaw: number; pitch: number; health: number };
   inventory: InventoryState;
   quests: QuestState;
   /** One-off world facts: things picked up, doors opened, places discovered. */

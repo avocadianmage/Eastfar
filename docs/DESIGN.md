@@ -6,7 +6,7 @@
 |---|---|---|
 | 0 | Foundation | Done |
 | 1 | A walk in the meadow | Built; awaiting sign-off on look and frame time on a real GPU |
-| 2 | The Quiet Village | Not started |
+| 2 | The Quiet Village | Built: roads, bridge, eight enterable buildings, six villagers with day/night routines, dialogue, quests, pack and journal, resting, saving. One quest (The Old Legend) is playable start to finish; the others are offered as their content arrives in milestones 3 and 4 |
 | 3 | Meadow content | Not started |
 | 4 | The Farms | Not started |
 | 5 | Polish and ship | Not started |
@@ -19,6 +19,16 @@ Decisions made while building milestones 0 and 1:
 - **Rendering:** both WebGPU and WebGL2 paths are verified to produce the same image. Grass, flowers and fireflies are placed on the GPU on wrapping grids (no streaming); trees are sorted into three detail levels on the CPU (about 0.5 ms per frame worst case).
 - **Sound** is synthesised in the browser for now (wind, creek, birds, crickets, owl, footsteps); recorded CC0 audio can replace it in milestone 5.
 - **Measured against the budget** at "high": about 35 draw calls and 1.0–1.3 M triangles in the meadow.
+
+Decisions made while building milestone 2:
+
+- **Villagers are simple figures built in code for now**, not a downloaded character pack. Most free-asset sites are blocked from the build sandbox; the one reachable pack is armoured chibi adventurers that would not suit the village. Swapping in rigged CC0 characters remains open for milestone 5.
+- **Buildings are data** (`src/world/buildings.ts`): position, facing, door, windows, furniture, lamps. One layout (`buildingLayout.ts`) produces both the drawn boxes and the colliders. Adding a building is adding an entry.
+- **Who is who:** Maelin (elder, by the well), Orsolt (beekeeper), Wren Tallow (herbalist), Bram (blacksmith), Hesta (innkeeper, at The Lantern & Loaf), Pip (child). The farmers Dorrin and Marta Haywell arrive with the Farms.
+- **Beds:** the player may rest in their own cottage and in the inn's upstairs beds, until morning (07:00) or nightfall (21:00). Resting restores health and saves.
+- **Quests are gated on content:** each quest names the part of the world it needs (bees, mushrooms, crows, scarecrows) and is only offered once that part exists.
+- **Saving:** automatic, every 30 seconds and shortly after anything changes, when resting, and when the tab is hidden or the game is paused. A saved game shows "Continue" with a "Start a new game" option.
+- **Dialogue is keyboard-driven** (E to continue, number keys to choose) so the mouse stays captured; the pack screen (Tab) releases the mouse and pauses time.
 
 ## Context
 

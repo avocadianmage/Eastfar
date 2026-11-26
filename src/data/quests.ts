@@ -21,6 +21,8 @@ export interface QuestDef {
   turnIn?: string;
   /** Quests that must be finished before this is offered. */
   requires?: string[];
+  /** Part of the world this quest depends on; it is only offered once that part exists in the game. */
+  needs?: 'bees' | 'mushrooms' | 'crows' | 'scarecrows';
   /** One line for the journal. */
   summary: string;
   /** Spoken when offering, one screen of text per entry. */
@@ -58,6 +60,7 @@ export const QUESTS: readonly QuestDef[] = [
     id: 'meadow_bees',
     title: 'A Sting in the Meadow',
     giver: 'beekeeper',
+    needs: 'bees',
     summary: 'Wild bees have gone bad-tempered in the meadow. Break up the angry swarms.',
     offer: [
       'They are not my bees, before you ask. Mine are gentle. These are wild ones, come down from the hills in a temper, and they are chasing my girls off the clover.',
@@ -73,6 +76,7 @@ export const QUESTS: readonly QuestDef[] = [
     id: 'moon_caps',
     title: 'Moonlight Caps',
     giver: 'herbalist',
+    needs: 'mushrooms',
     summary: 'Gather six Moonlight Caps from the meadow. They glow after dark, which makes them far easier to find.',
     offer: [
       'I need Moonlight Caps. Little pale mushrooms, grow in the damp along the creek and under the meadow trees.',
@@ -88,6 +92,7 @@ export const QUESTS: readonly QuestDef[] = [
     id: 'crows',
     title: 'A Murder of Crows',
     giver: 'farmer_dorrin',
+    needs: 'crows',
     summary: 'Crows are stripping the Haywell fields. Drive them off.',
     offer: [
       'Crows. Never seen so many, nor so bold. They do not even bother with the scarecrows any more. Sit right on their hats.',
@@ -103,6 +108,7 @@ export const QUESTS: readonly QuestDef[] = [
     id: 'night_walkers',
     title: 'What Walks at Night',
     giver: 'farmer_marta',
+    needs: 'scarecrows',
     requires: ['crows'],
     summary: 'Something moves in the Haywell fields after dark. Go out at night and put a stop to it.',
     offer: [
