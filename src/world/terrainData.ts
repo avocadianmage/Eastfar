@@ -4,7 +4,7 @@
  * the same in the game, in tests and in a worker.
  */
 import { clamp, fbm2, lerp, smoothstep, valueNoise2 } from '../core/rng';
-import { BRIDGE, BUILDINGS, PATHS, footprintSdf, pathSdf } from './buildings';
+import { BRIDGE, BUILDINGS, PATHS, footprintSdf } from './buildings';
 import { buildCreek, type CreekSample } from './creek';
 import { FIELDS, fieldSdf } from './fields';
 import { MEADOW, STATUE, TERRAIN, VILLAGE, WORLD_SEED, eastOpening, farmsSdf, playableSdf } from './layout';
@@ -56,8 +56,12 @@ function regionalLevel(z: number): number {
 
 /** Ground height before the creek is cut into it. */
 export function baseGround(x: number, z: number): number {
+  return baseGroundAt(x, z, playableSdf(x, z));
+}
+
+/** As baseGround, for callers that already know the distance to the walkable land's edge. */
+function baseGroundAt(x: number, z: number, sdf: number): number {
   const seed = WORLD_SEED;
-  const sdf = playableSdf(x, z);
   const outside = Math.max(sdf, 0);
 
   const wVillage = 1 - smoothstep(55, 125, Math.hypot(x - VILLAGE.x, z - VILLAGE.z));
@@ -70,7 +74,8 @@ export function baseGround(x: number, z: number): number {
   amp *= 1 - 0.78 * wFarm;
   let h = regionalLevel(z);
   h += fbm2(x / 150, z / 150, 4, seed) * amp * 1.6;
-  h += fbm2(x / 38, z / 38, 3, seed + 31) * amp * 0.22;
+  // Small bumps only matter where the player can get close to them.
+  if (outside < 130) h += fbm2(x / 38, z / 38, 3, seed + 31) * amp * 0.22;
 
   // Hills ringing the walkable land; they flatten out where the forest lies east.
   if (outside > 0) {
@@ -82,22 +87,37 @@ export function baseGround(x: number, z: number): number {
     const crags = valueNoise2(x / 23, z / 23, seed + 5) * 2.2 * smoothstep(10, 60, outside);
     h += (bank + rise + ridge + crags) * hillScale;
     // Low swells in the forest to the east.
-    h += open * fbm2(x / 90, z / 90, 3, seed + 13) * 4 * smoothstep(0, 80, outside);
+    if (open > 0) h += open * fbm2(x / 90, z / 90, 3, seed + 13) * 4 * smoothstep(0, 80, outside);
   }
   return h;
 }
 
-export function bakeTerrain(): TerrainData {
+/** @param timings if given, receives how long each stage took in milliseconds. */
+export function bakeTerrain(timings?: Record<string, number>): TerrainData {
+  let mark = performance.now();
+  const lap = (name: string) => {
+    const now = performance.now();
+    if (timings) timings[name] = Math.round(now - mark);
+    mark = now;
+  };
   const { n, cell, minX, minZ, size } = TERRAIN;
   const count = n * n;
   const heights = new Float32Array(count);
 
+  // Distance to the edge of the walkable land, worked out once and reused by every stage.
+  const playable = new Float32Array(count);
   for (let iz = 0; iz < n; iz++) {
     const z = minZ + iz * cell;
     for (let ix = 0; ix < n; ix++) {
-      heights[iz * n + ix] = baseGround(minX + ix * cell, z);
+      const x = minX + ix * cell;
+      const i = iz * n + ix;
+      const sdf = playableSdf(x, z);
+      playable[i] = sdf;
+      heights[i] = baseGroundAt(x, z, sdf);
     }
   }
+
+  lap('heights');
 
   // --- Level the ground under each building, easing back into the land around it. ---
   const buildingGround: Record<string, number> = {};
@@ -117,6 +137,8 @@ export function bakeTerrain(): TerrainData {
       }
     }
   }
+
+  lap('buildings');
 
   // --- Creek: find each nearby cell's closest point on the centreline. ---
   const creek = buildCreek(baseGround);
@@ -199,15 +221,23 @@ export function bakeTerrain(): TerrainData {
     }
   }
 
+  lap('creek');
+
   // --- Normals and hollow shading. ---
   const normals = new Uint8Array(count * 4);
-  const at = (ix: number, iz: number) => heights[clamp(iz, 0, n - 1) * n + clamp(ix, 0, n - 1)]!;
+  const atEdge = (ix: number, iz: number) => heights[clamp(iz, 0, n - 1) * n + clamp(ix, 0, n - 1)]!;
+  const K = 4;
   for (let iz = 0; iz < n; iz++) {
+    const inner = iz >= K && iz < n - K;
     for (let ix = 0; ix < n; ix++) {
-      const hl = at(ix - 1, iz);
-      const hr = at(ix + 1, iz);
-      const hu = at(ix, iz - 1);
-      const hd = at(ix, iz + 1);
+      // Away from the borders, read neighbours directly; near them, clamp.
+      const fast = inner && ix >= K && ix < n - K;
+      const i0 = iz * n + ix;
+      const at = fast ? (dx: number, dz: number) => heights[i0 + dz * n + dx]! : (dx: number, dz: number) => atEdge(ix + dx, iz + dz);
+      const hl = at(-1, 0);
+      const hr = at(1, 0);
+      const hu = at(0, -1);
+      const hd = at(0, 1);
       let nx = hl - hr;
       let ny = 2 * cell;
       let nz = hu - hd;
@@ -216,10 +246,8 @@ export function bakeTerrain(): TerrainData {
       ny *= inv;
       nz *= inv;
       // Compare with a wider ring of neighbours: lower than them = a hollow = a little darker.
-      const K = 4;
-      const ring =
-        (at(ix - K, iz) + at(ix + K, iz) + at(ix, iz - K) + at(ix, iz + K) + at(ix - K, iz - K) + at(ix + K, iz - K) + at(ix - K, iz + K) + at(ix + K, iz + K)) / 8;
-      const occl = clamp(0.5 + (at(ix, iz) - ring) * 0.22, 0, 1);
+      const ring = (at(-K, 0) + at(K, 0) + at(0, -K) + at(0, K) + at(-K, -K) + at(K, -K) + at(-K, K) + at(K, K)) / 8;
+      const occl = clamp(0.5 + (heights[i0]! - ring) * 0.22, 0, 1);
       const o = (iz * n + ix) * 4;
       normals[o] = Math.round((nx * 0.5 + 0.5) * 255);
       normals[o + 1] = Math.round((ny * 0.5 + 0.5) * 255);
@@ -227,6 +255,8 @@ export function bakeTerrain(): TerrainData {
       normals[o + 3] = Math.round(occl * 255);
     }
   }
+
+  lap('normals');
 
   // --- What grows where. ---
   const masks = new Uint8Array(count * 4);
@@ -238,14 +268,16 @@ export function bakeTerrain(): TerrainData {
       const i = iz * n + ix;
       const ny = normals[i * 4 + 1]! / 255 * 2 - 1;
       const rock = smoothstep(0.86, 0.7, ny);
-      const sdf = playableSdf(x, z);
+      const sdf = playable[i]!;
 
       const wVillage = 1 - smoothstep(50, 110, Math.hypot(x - VILLAGE.x, z - VILLAGE.z));
       const wMeadow = 1 - smoothstep(MEADOW.radius - 50, MEADOW.radius + 30, Math.hypot(x - MEADOW.x, z - MEADOW.z));
       const wFarm = 1 - smoothstep(-40, 10, farmsSdf(x, z));
       const wWild = smoothstep(5, 70, sdf);
 
-      const patch = fbm2(x / 46, z / 46, 3, seed + 211);
+      // Far outside the walkable land the detail cannot be seen: skip the noise there.
+      const near = sdf < 140;
+      const patch = near ? fbm2(x / 46, z / 46, 3, seed + 211) : 0;
       let grass = 0.6 + patch * 0.12;
       grass = lerp(grass, 0.88 + patch * 0.3, wMeadow);
       grass = lerp(grass, 0.34, wVillage);
@@ -255,7 +287,7 @@ export function bakeTerrain(): TerrainData {
       const d = creekDist[i]!;
       const hw = creekHalfWidth[i]!;
       let wet = 0;
-      let flowers = wMeadow * smoothstep(-0.05, 0.4, fbm2(x / 30, z / 30, 3, seed + 401)) * 0.9;
+      let flowers = wMeadow > 0 ? wMeadow * smoothstep(-0.05, 0.4, fbm2(x / 30, z / 30, 3, seed + 401)) * 0.9 : 0;
       flowers += wMeadow * 0.12;
       flowers = Math.max(flowers, (1 - wVillage) * (1 - wWild) * (1 - wFarm) * 0.1);
       if (d < FAR) {
@@ -279,7 +311,36 @@ export function bakeTerrain(): TerrainData {
     }
   }
 
+  lap('growth');
+
   // --- Woods: thick on the hills around the walkable land, groves and lone trees within it. ---
+  // Distance to the nearest road or path, stamped once around each stretch of path.
+  const pathDist = new Float32Array(count).fill(99);
+  for (const p of PATHS) {
+    const reach = p.width / 2 + 6;
+    for (let k = 0; k < p.points.length - 1; k++) {
+      const a = p.points[k]!;
+      const b = p.points[k + 1]!;
+      const abx = b[0] - a[0];
+      const abz = b[1] - a[1];
+      const len2 = abx * abx + abz * abz;
+      const ix0 = Math.max(0, Math.floor((Math.min(a[0], b[0]) - reach - minX) / cell));
+      const ix1 = Math.min(n - 1, Math.ceil((Math.max(a[0], b[0]) + reach - minX) / cell));
+      const iz0 = Math.max(0, Math.floor((Math.min(a[1], b[1]) - reach - minZ) / cell));
+      const iz1 = Math.min(n - 1, Math.ceil((Math.max(a[1], b[1]) + reach - minZ) / cell));
+      for (let iz = iz0; iz <= iz1; iz++) {
+        const z = minZ + iz * cell;
+        for (let ix = ix0; ix <= ix1; ix++) {
+          const x = minX + ix * cell;
+          const t = clamp(((x - a[0]) * abx + (z - a[1]) * abz) / len2, 0, 1);
+          const d = Math.hypot(x - (a[0] + abx * t), z - (a[1] + abz * t)) - p.width / 2;
+          const i = iz * n + ix;
+          if (d < pathDist[i]!) pathDist[i] = d;
+        }
+      }
+    }
+  }
+
   const masks2 = new Uint8Array(count * 4);
   for (let iz = 0; iz < n; iz++) {
     const z = minZ + iz * cell;
@@ -287,14 +348,14 @@ export function bakeTerrain(): TerrainData {
       const x = minX + ix * cell;
       const i = iz * n + ix;
       const rock = masks[i * 4 + MASK_DIRT]! / 255;
-      const sdf = playableSdf(x, z);
+      const sdf = playable[i]!;
       const wild = smoothstep(2, 34, sdf);
       const open = eastOpening(x, z);
       const wVillage = 1 - smoothstep(60, 120, Math.hypot(x - VILLAGE.x, z - VILLAGE.z));
       const wFarm = 1 - smoothstep(-30, 20, farmsSdf(x, z));
       const wMeadow = 1 - smoothstep(MEADOW.radius - 40, MEADOW.radius + 20, Math.hypot(x - MEADOW.x, z - MEADOW.z));
 
-      const grove = smoothstep(0.16, 0.4, fbm2(x / 72, z / 72, 3, seed + 900));
+      const grove = wMeadow > 0 ? smoothstep(0.16, 0.4, fbm2(x / 72, z / 72, 3, seed + 900)) : 0;
       let forest = wild * 0.94;
       // Groves gather toward the meadow's rim; a scatter of lone trees everywhere else.
       const rim = smoothstep(0.35, 0.95, Math.hypot(x - MEADOW.x, z - MEADOW.z) / MEADOW.radius);
@@ -326,7 +387,7 @@ export function bakeTerrain(): TerrainData {
       let path = 0;
       let built = 0;
       if (sdf < 60) {
-        const pd = pathSdf(x, z);
+        const pd = pathDist[i]!;
         path = 1 - smoothstep(-0.25, 0.55, pd);
         forest *= smoothstep(1.5, 4, pd);
         // The village green: trodden earth around the well where the roads meet.
@@ -375,6 +436,7 @@ export function bakeTerrain(): TerrainData {
     }
   }
 
+  lap('woods');
   return { n, cell, minX, minZ, size, heights, normals, masks, masks2, bridgeDeck, buildingGround, creek, creekDist, creekLevel, creekHalfWidth };
 }
 

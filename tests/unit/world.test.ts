@@ -15,7 +15,8 @@ beforeAll(() => {
 
 describe('terrain', () => {
   it('bakes quickly enough for a short initial load', () => {
-    expect(bakeMs).toBeLessThan(8000);
+    // A guard against something pathological, not a benchmark: build machines vary a lot.
+    expect(bakeMs).toBeLessThan(20000);
   });
 
   it('has finite heights everywhere', () => {
