@@ -17,6 +17,8 @@ export const TERRAIN = {
 export const WORLD_SEED = 20261;
 
 export const VILLAGE = { x: 0, z: 0, radius: 95 } as const;
+/** Roads and yards within this many metres of the village centre are cobbled; beyond it they are earth. */
+export const COBBLED_WITHIN = 74;
 export const MEADOW = { x: 40, z: -330, radius: 205 } as const;
 export const FARMS = { x: 520, z: 30, halfX: 330, halfZ: 260, corner: 60 } as const;
 

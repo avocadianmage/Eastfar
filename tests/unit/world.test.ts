@@ -31,17 +31,24 @@ describe('terrain', () => {
     expect(max).toBeLessThan(260);
   });
 
-  it('keeps the village and farms close to flat', () => {
+  it('rolls gently through the village: neither flat nor steep', () => {
     let lo = Infinity;
     let hi = -Infinity;
-    for (let a = 0; a < 16; a++) {
-      const x = VILLAGE.x + Math.cos(a) * 40;
-      const z = VILLAGE.z + Math.sin(a) * 40;
-      const h = heightAt(terrain, x, z);
-      lo = Math.min(lo, h);
-      hi = Math.max(hi, h);
+    let steepest = 0;
+    for (let x = VILLAGE.x - 80; x <= VILLAGE.x + 80; x += 4) {
+      for (let z = VILLAGE.z - 80; z <= VILLAGE.z + 80; z += 4) {
+        if (Math.hypot(x - VILLAGE.x, z - VILLAGE.z) > 80) continue;
+        const h = heightAt(terrain, x, z);
+        lo = Math.min(lo, h);
+        hi = Math.max(hi, h);
+        steepest = Math.max(steepest, Math.hypot(heightAt(terrain, x + 2, z) - h, heightAt(terrain, x, z + 2) - h) / 2);
+      }
     }
-    expect(hi - lo).toBeLessThan(4);
+    // A few metres of rise and fall across the village...
+    expect(hi - lo).toBeGreaterThan(4);
+    expect(hi - lo).toBeLessThan(14);
+    // ...but nothing a villager would call a climb (about 20 degrees at most).
+    expect(steepest).toBeLessThan(0.38);
   });
 
   it('rings the walkable land with higher ground', () => {

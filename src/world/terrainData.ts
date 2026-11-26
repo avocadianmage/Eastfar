@@ -54,6 +54,11 @@ function regionalLevel(z: number): number {
   return 22 - z * 0.008;
 }
 
+/** The gentle hills of the walkable land, -1 (hollow) to 1 (hilltop). Copses grow on the tops. */
+export function hillNoise(x: number, z: number): number {
+  return fbm2(x / 82, z / 82, 3, WORLD_SEED + 211);
+}
+
 /** Ground height before the creek is cut into it. */
 export function baseGround(x: number, z: number): number {
   return baseGroundAt(x, z, playableSdf(x, z));
@@ -68,14 +73,18 @@ function baseGroundAt(x: number, z: number, sdf: number): number {
   const wFarm = 1 - smoothstep(-50, 20, farmsSdf(x, z));
   const open = eastOpening(x, z);
 
-  // Rolling ground: gentle in the meadow, nearly flat in the village and farms.
-  let amp = 3.6;
-  amp *= 1 - 0.82 * wVillage;
-  amp *= 1 - 0.78 * wFarm;
+  // Rolling ground: long swells, with gentle hills a short walk across on top of them. The meadow
+  // rolls most, the village a little less, and the farms' fields lie flatter.
+  let amp = 4.4;
+  amp *= 1 - 0.2 * wVillage;
+  amp *= 1 - 0.68 * wFarm;
   let h = regionalLevel(z);
   h += fbm2(x / 150, z / 150, 4, seed) * amp * 1.6;
-  // Small bumps only matter where the player can get close to them.
-  if (outside < 130) h += fbm2(x / 38, z / 38, 3, seed + 31) * amp * 0.22;
+  if (outside < 160) {
+    h += hillNoise(x, z) * amp * 0.95;
+    // Small bumps only matter where the player can get close to them.
+    h += fbm2(x / 38, z / 38, 3, seed + 31) * amp * 0.2;
+  }
 
   // Hills ringing the walkable land; they flatten out where the forest lies east.
   if (outside > 0) {
@@ -360,9 +369,11 @@ export function bakeTerrain(timings?: Record<string, number>): TerrainData {
       // Groves gather toward the meadow's rim; a scatter of lone trees everywhere else.
       const rim = smoothstep(0.35, 0.95, Math.hypot(x - MEADOW.x, z - MEADOW.z) / MEADOW.radius);
       forest = Math.max(forest, grove * (0.18 + 0.5 * rim) * wMeadow);
-      forest = Math.max(forest, 0.022);
+      forest = Math.max(forest, 0.034);
       forest = lerp(forest, 0.014, wFarm * (1 - wild));
-      forest = lerp(forest, 0.02, wVillage);
+      forest = lerp(forest, 0.06, wVillage);
+      // Copses crown the hilltops, in the meadow and round the village, so the land is not one open view.
+      if (sdf < 20 && wFarm < 0.5) forest = Math.max(forest, smoothstep(0.3, 0.62, hillNoise(x, z)) * 0.42 * (1 - wFarm));
 
       // A ring of trees hides the statue's dell, with a gap on the south-east side to find it by.
       const sdx = x - STATUE.x;

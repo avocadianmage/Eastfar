@@ -24,7 +24,9 @@ import {
 } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import { ROW_SPACING } from '../world/fields';
+import { COBBLED_WITHIN, VILLAGE } from '../world/layout';
 import type { TerrainData } from '../world/terrainData';
+import { COBBLE_TILE, cobbleTextures } from './cobbles';
 import { env, lanternLight } from './env';
 import type { Quality } from './quality';
 import type { WorldTextures } from './textures';
@@ -140,7 +142,18 @@ export class TerrainMesh {
 
     const uv = terrainUv(t, positionWorld.xz);
     const nt = texture(tex.normal, uv);
-    const worldNormal = nt.xyz.mul(2).sub(1).normalize();
+    const landNormal = nt.xyz.mul(2).sub(1).normalize();
+
+    // The village's streets are cobbled: wherever a road or yard lies within a short walk of the well.
+    // Stones at the rim of the paving stand alone, with earth between them.
+    const cobbles = cobbleTextures();
+    const cobbleUv = positionWorld.xz.div(COBBLE_TILE);
+    const relief = texture(cobbles.relief, cobbleUv);
+    const inVillage = float(1).sub(smoothstep(COBBLED_WITHIN - 14, COBBLED_WITHIN, length(positionWorld.xz.sub(vec2(VILLAGE.x, VILLAGE.z)))));
+    const paved = smoothstep(0.4, 0.62, texture(tex.mask2, uv).b.mul(inVillage).add(relief.b.sub(0.55).mul(0.34)));
+    // Each stone's rounded top leans the surface, so light and shadow pick the stones out.
+    const lean = vec3(relief.r.sub(0.5), 0, relief.g.sub(0.5)).mul(2.4).mul(paved);
+    const worldNormal = landNormal.add(lean).normalize();
     mat.normalNode = transformNormalToView(worldNormal);
 
     mat.colorNode = Fn(() => {
@@ -187,6 +200,11 @@ export class TerrainMesh {
       // Roads and paths: packed earth with a scatter of pebbles, worn pale down the middle.
       const pathCol = mix(col('#7d6a50'), col('#a8946f'), blotch.mul(0.5).add(fine.mul(0.5)));
       c.assign(mix(c, pathCol, smoothstep(0.25, 0.7, m2.b.add(fine.sub(0.5).mul(0.3)))));
+
+      // Cobbles: grey and tan setts, darker in the joints, a little mossy in patches.
+      const stone = texture(cobbles.albedo, cobbleUv).rgb.mul(blotch.mul(0.3).add(0.82));
+      const mossy = mix(stone, stone.mul(col('#8fa06a')).mul(1.5), smoothstep(0.62, 0.9, texture(tex.noise, xz.mul(1 / 9)).g).mul(0.35));
+      c.assign(mix(c, mossy, paved));
 
       c.assign(mix(c, bed, smoothstep(0.15, 0.7, m.b)));
       c.mulAssign(mix(float(0.7), float(1.14), occl));
