@@ -25,8 +25,8 @@ The kit's four trim textures are stacked into one image and its models thinned a
 | `creek.mp3` | Park ambiences (small river) | Thimras | CC0 1.0 | https://opengameart.org/content/park-ambiences |
 | `crickets.mp3` | Crickets Ambient Noise - loopable | 2DPIXX | CC0 1.0 | https://opengameart.org/content/crickets-ambient-noise-loopable |
 | `fire.mp3` | Fireplace Sound loop | StarNinjas | CC0 1.0 | https://opengameart.org/content/fireplace-sound-loop |
-| `sfx.mp3` (footsteps on grass, stone and wood; thumps) | Impact Sounds | Kenney | CC0 1.0 | https://kenney.nl/assets/impact-sounds |
-| `sfx.mp3` (footsteps on earth; doors) | RPG Audio | Kenney | CC0 1.0 | https://kenney.nl/assets/rpg-audio |
+| `sfx.mp3` (footsteps on grass, earth, stone and wood; thumps) | Impact Sounds | Kenney | CC0 1.0 | https://kenney.nl/assets/impact-sounds |
+| `sfx.mp3` (doors) | RPG Audio | Kenney | CC0 1.0 | https://kenney.nl/assets/rpg-audio |
 
 Each bed is the steadiest stretch of its recording, filtered, levelled and cross-faded into a loop by `tools/assets/build-audio.mjs`. Birdsong, wind, bees, the owl, music and the other effects are synthesised in the game.
 

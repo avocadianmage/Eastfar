@@ -128,9 +128,12 @@ function bed(name, source, { length, fade, channels, filter, level, kbps }) {
   return { loopStart: ROLL, loopEnd: ROLL + n / RATE };
 }
 
-/** One short sound: silence trimmed from both ends, peak set, a few milliseconds of fade so it cannot click. */
-function clip(source, peak = 0.7) {
-  const a = decode(join(SRC, source), { channels: 1, filter: 'highpass=f=60' });
+/**
+ * One short sound: silence trimmed from both ends, peak set, a few milliseconds of fade so it cannot click.
+ * @param filter more ffmpeg filters to shape it with, after the rumble is taken off
+ */
+function clip(source, peak = 0.7, filter = '') {
+  const a = decode(join(SRC, source), { channels: 1, filter: `highpass=f=60${filter ? ',' + filter : ''}` });
   const threshold = 0.012;
   let from = 0;
   while (from < a.length && Math.abs(a[from]) < threshold) from++;
@@ -166,7 +169,9 @@ const groups = {
   grass: [0, 1, 2, 3, 4].map((i) => `${K}footstep_grass_00${i}.ogg`),
   stone: [0, 1, 2, 3, 4].map((i) => `${K}footstep_concrete_00${i}.ogg`),
   wood: [0, 1, 2, 3, 4].map((i) => `${K}footstep_wood_00${i}.ogg`),
-  dirt: [0, 1, 2, 3, 4].map((i) => `${R}footstep0${i}.ogg`),
+  // A step on packed earth is one soft, dull thud. (The RPG pack's footsteps, used here at first,
+  // are boots on a hard floor: two knocks a step and bright, which clacked along the paths.)
+  dirt: [0, 1, 2, 3, 4].map((i) => ({ file: `${K}footstep_carpet_00${i}.ogg`, peak: 0.34, filter: 'lowpass=f=900,lowpass=f=1600' })),
   thump: [0, 1, 2, 3].map((i) => `${K}impactPunch_medium_00${i}.ogg`),
   doorOpen: [`${R}doorOpen_1.ogg`, `${R}doorOpen_2.ogg`],
   doorClose: [`${R}doorClose_1.ogg`, `${R}doorClose_2.ogg`],
@@ -178,7 +183,7 @@ let at = gap;
 for (const [name, files] of Object.entries(groups)) {
   marks[name] = [];
   for (const f of files) {
-    const a = clip(f);
+    const a = typeof f === 'string' ? clip(f) : clip(f.file, f.peak, f.filter);
     marks[name].push([+(at / RATE).toFixed(4), +(a.length / RATE).toFixed(4)]);
     pieces.push(a, new Float32Array(gap));
     at += a.length + gap;
