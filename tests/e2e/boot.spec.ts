@@ -128,8 +128,8 @@ test('stays inside the draw-call and triangle budget at high quality', async ({ 
     ['creek bank', 96, -352, 255],
     ['village green', -6, 8, 80],
     ['forest edge', -150, -330, 300],
-    // The spot on walkable ground with the most trees close by.
-    ['deep in the wood', -124, -452, 270],
+    // The spot on walkable ground with the most trees close by, looking the costliest way.
+    ['deep in the wood', -124, -452, 315],
   ];
   for (const [name, x, z, yaw] of views) {
     await page.evaluate(([px, pz, pyaw]) => (window as unknown as W).__eastfar.teleport(px!, pz!, pyaw), [x, z, yaw]);

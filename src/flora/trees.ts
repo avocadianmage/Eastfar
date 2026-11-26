@@ -45,8 +45,6 @@ import type { WorldTextures } from '../render/textures';
 /** Trees are drawn out to this distance; the terrain takes over as canopy beyond it. */
 export const TREE_FAR = 460;
 const MID_FAR = 235;
-/** Within this distance a broadleaf is drawn with real limbs, twigs and fixed leaf sprigs. */
-const CLOSE_UP = 58;
 /**
  * Where one level of detail hands over to the next, both are drawn at full size in the same
  * place: the incoming one dissolves in over the first half of a band of distance and the outgoing
@@ -58,6 +56,10 @@ const BAND_NEAR = 7;
 const BAND_MID = 9;
 /** Each tree hands over this much nearer or further than the rest (metres), so a wood does not change all at once. */
 const STAGGER = 5;
+/** A tree out of view is still drawn if it stands within this distance (metres) of the edge of the view: its shadow may fall there. */
+const SHADOW_REACH = 30;
+/** Trees a little outside the view are kept as well, so a quick turn of the head finds them already there. (Tangent of the angle.) */
+const TURN_MARGIN = Math.tan(0.32);
 /** Trees are re-sorted only after the player has moved a little; this much slack (metres) covers the lag. */
 const SORT_SLACK = 2.5;
 
@@ -655,10 +657,12 @@ export class Trees {
   private readonly close: Lod;
   private readonly fwd = new THREE.Vector3();
 
-  constructor(scene: THREE.Scene, t: TerrainData, tex: WorldTextures, quality: Quality, physics: Physics | null) {
+  /** @param closeDistance overrides the preset's distance for full-detail broadleaves (metres) */
+  constructor(scene: THREE.Scene, t: TerrainData, tex: WorldTextures, quality: Quality, physics: Physics | null, closeDistance?: number) {
     this.set = placeTrees(t);
     this.nearDist = quality.treeDetailDistance;
-    this.closeDist = Math.min(CLOSE_UP, this.nearDist * 0.6);
+    // Within this distance a broadleaf is drawn with real limbs, twigs and fixed leaf sprigs.
+    this.closeDist = Math.min(Math.max(closeDistance ?? quality.treeCloseDistance, 12), this.nearDist - 30);
 
     const caps = [1400, 5000, 14000];
     const leafTex = leafTexture();
@@ -900,14 +904,15 @@ export class Trees {
     const s = this.set;
     for (const row of this.lods) for (const l of row) l.count = 0;
 
-    // Keep trees inside a wide cone ahead; always keep close ones (their shadows reach into view).
+    // Keep the trees in a wide cone ahead, and any tree near enough to the edge of the view for
+    // its shadow to reach into it; the rest, behind and beside the player, are not drawn.
     const fl = Math.hypot(this.fwd.x, this.fwd.z) || 1;
     const fx = this.fwd.x / fl;
     const fz = this.fwd.z / fl;
     const halfFov = Math.atan(Math.tan((camera.fov * Math.PI) / 360) * camera.aspect);
-    const cosCone = Math.cos(Math.min(Math.PI, halfFov + 0.32));
+    const cosEdge = Math.cos(halfFov);
+    const sinEdge = Math.sin(halfFov);
     const lookingFlat = Math.abs(this.fwd.y) < 0.75;
-    const ALWAYS = 95;
 
     // Each level is sent every tree that could be in its band, with slack for not having
     // re-sorted yet. (Distances here carry each tree's own offset, as in the shader.)
@@ -933,7 +938,17 @@ export class Trees {
           const d2 = dx * dx + dz * dz;
           if (d2 > R * R) continue;
           const d = Math.sqrt(d2);
-          if (d > ALWAYS && lookingFlat && dx * fx + dz * fz < d * cosCone) continue;
+          if (lookingFlat) {
+            // Seen from above, where the tree is against the nearer edge of the view: `out` metres outside it, `along` metres along it.
+            const ahead = dx * fx + dz * fz;
+            const side = Math.abs(dx * fz - dz * fx);
+            const out = side * cosEdge - ahead * sinEdge;
+            if (out > 0) {
+              const along = ahead * cosEdge + side * sinEdge;
+              const gap = along > 0 ? out : d;
+              if (gap > SHADOW_REACH && !(along > 0 && out < along * TURN_MARGIN)) continue;
+            }
+          }
           const row = this.lods[s.kind[i]!]!;
           // Bands overlap so one level can dissolve out while the next is already there.
           const broadleaf = s.kind[i] !== TREE_CONIFER;

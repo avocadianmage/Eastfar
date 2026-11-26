@@ -8,7 +8,7 @@ Browser game: 3D first-person fantasy adventure. Three.js (`three/webgpu` + TSL 
 - `npm test` — unit tests (Vitest, `tests/unit`)
 - `npm run test:e2e` — Playwright tests against a production build (`tests/e2e`)
 - `npm run build` — type-check and build to `dist/`
-- `node tools/probe.mjs "js expression" "query"` — evaluate JavaScript inside the running game (debug hooks are on `window.__eastfar`)
+- `node tools/probe.mjs "js expression" "query"` — evaluate JavaScript inside the running game (debug hooks are on `window.__eastfar`). It runs at low quality with the grass left out unless the query says otherwise: for triangle or draw-call counts pass `quality=high&skip=none`
 - `npm run assets:fetch` / `npm run assets:build` — download the source packs into `.cache/packs/` (git-ignored; needs network, and `NODE_USE_ENV_PROXY=1` in this sandbox) and rebuild `public/assets/` from `tools/assets/recipes.mjs`
 - `npm run assets:preview -- name="model=elder&clip=Idle_Loop&t=1&views=full:0,face:30"` — screenshots of a built character in a bare viewer, into `shots/assets/`
 - `node tools/live.mjs` — load the published site in a headless browser and report failed requests and console errors

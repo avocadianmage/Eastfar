@@ -176,7 +176,7 @@ export class Game {
     onStatus('Setting stones in place…');
     await nextFrame();
     this.physics = await Physics.create(this.terrain);
-    if (!skip.has('trees')) this.trees = new Trees(this.scene, this.terrain, this.textures, this.quality, this.physics);
+    if (!skip.has('trees')) this.trees = new Trees(this.scene, this.terrain, this.textures, this.quality, this.physics, this.params.treeClose);
     if (!skip.has('rocks')) this.rocks = new Rocks(this.scene, this.terrain, this.textures, this.physics);
     // Furniture and props come from models unless left out (`skip=props`), in which case the code-built furniture is used.
     const propAssets = propsLoading ? await propsLoading : null;

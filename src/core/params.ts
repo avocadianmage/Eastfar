@@ -40,6 +40,8 @@ export interface DebugParams {
   tone?: string;
   /** `synth`: use the synthesised sounds only, not the recordings. */
   audio?: string;
+  /** Draw broadleaves in full out to this distance (metres) instead of the preset's, to try the cost on a real machine. */
+  treeClose?: number;
   /** Parts of the world to leave out, for diagnosing cost: e.g. `skip=grass,shadows`. */
   skip: Set<string>;
 }
@@ -94,6 +96,7 @@ export function parseParams(search: string): DebugParams {
     offscreen: flag('offscreen'),
     tone: q.get('tone') ?? undefined,
     audio: q.get('audio') ?? undefined,
+    treeClose: parseNum(q.get('treeclose')),
     skip: new Set((q.get('skip') ?? '').split(',').filter(Boolean)),
   };
 }
