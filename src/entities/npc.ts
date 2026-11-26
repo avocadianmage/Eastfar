@@ -49,8 +49,10 @@ function figure(look: NpcLook): THREE.BufferGeometry {
   const hat = look.hatColour ? c(look.hatColour) : hair;
   switch (look.hat) {
     case 'hood':
-      mb.cylinder(0, 1.66, -0.02, 0.155, 0.24, 8, st(hat), st(hat));
-      mb.box(0, 1.42, -0.1, 0.34, 0.2, 0.16, st(hat));
+      // Sits back on the head so the face shows; drapes over the shoulders behind.
+      mb.cylinder(0, 1.71, -0.035, 0.15, 0.13, 8, st(hat), st(hat));
+      mb.box(0, 1.56, -0.115, 0.27, 0.3, 0.07, st(hat));
+      mb.box(0, 1.41, -0.1, 0.36, 0.14, 0.14, st(hat));
       break;
     case 'cap':
       mb.cylinder(0, 1.75, 0, 0.14, 0.07, 8, st(hat), st(hat));
