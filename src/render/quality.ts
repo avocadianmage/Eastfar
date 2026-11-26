@@ -20,6 +20,8 @@ export interface Quality {
   /** Detailed trees are drawn within this distance; simple ones beyond. */
   treeDetailDistance: number;
   bloom: boolean;
+  /** Multisample anti-aliasing samples for the scene (0 = off). */
+  msaa: number;
   /** Terrain grid resolution (quads per side of each detail ring). */
   terrainRing: number;
   fireflies: number;
@@ -38,6 +40,7 @@ export const QUALITY: Record<QualityName, Quality> = {
     flowerDensity: 0.5,
     treeDetailDistance: 50,
     bloom: false,
+    msaa: 0,
     terrainRing: 48,
     fireflies: 150,
   },
@@ -53,6 +56,7 @@ export const QUALITY: Record<QualityName, Quality> = {
     flowerDensity: 0.75,
     treeDetailDistance: 80,
     bloom: true,
+    msaa: 2,
     terrainRing: 64,
     fireflies: 300,
   },
@@ -68,6 +72,7 @@ export const QUALITY: Record<QualityName, Quality> = {
     flowerDensity: 1,
     treeDetailDistance: 110,
     bloom: true,
+    msaa: 4,
     terrainRing: 64,
     fireflies: 500,
   },
@@ -83,6 +88,7 @@ export const QUALITY: Record<QualityName, Quality> = {
     flowerDensity: 1.4,
     treeDetailDistance: 150,
     bloom: true,
+    msaa: 4,
     terrainRing: 96,
     fireflies: 800,
   },

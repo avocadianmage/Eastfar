@@ -6,8 +6,11 @@ import { GameClock } from './core/clock';
 import { Input, type Action } from './core/input';
 import type { DebugParams } from './core/params';
 import { Player } from './entities/player';
+import { Grass } from './flora/grass';
 import { env } from './render/env';
+import { DynamicResolution } from './render/dynamicResolution';
 import { PerfHud } from './render/perfHud';
+import { Post } from './render/post';
 import { QUALITY, loadQualityName, type Quality } from './render/quality';
 import { createRenderer, type RenderContext } from './render/renderer';
 import { Sky } from './render/sky';
@@ -51,6 +54,9 @@ export class Game {
   player!: Player;
   sky!: Sky;
   terrainMesh!: TerrainMesh;
+  grass?: Grass;
+  post!: Post;
+  private dynRes!: DynamicResolution;
 
   /** True while the player is in control (mouse captured, or autostarted for tests). */
   playing = false;
@@ -83,6 +89,11 @@ export class Game {
     const skip = this.params.skip;
     this.sky = new Sky(this.scene, this.textures.noise, this.quality, skip);
     if (!skip.has('terrain')) this.terrainMesh = new TerrainMesh(this.scene, this.terrain, this.textures, this.quality);
+    if (!skip.has('grass')) this.grass = new Grass(this.scene, this.terrain, this.textures, this.quality);
+
+    this.post = new Post(this.ctx.renderer, this.scene, this.camera, this.quality, skip);
+    this.dynRes = new DynamicResolution(this.quality.maxRenderScale);
+    this.post.setScale(this.params.scale ?? this.quality.maxRenderScale);
 
     onStatus('Setting stones in place…');
     await nextFrame();
@@ -100,7 +111,7 @@ export class Game {
     this.hud.extra = () => {
       const f = this.player.feet;
       return (
-        `${this.ctx.pixelWidth}×${this.ctx.pixelHeight} at ${Math.round(this.ctx.renderScale * 100)}%   ${this.quality.name}   ${this.ctx.backend}   display ${Math.round(this.displayHz)} Hz\n` +
+        `${this.ctx.pixelWidth}×${this.ctx.pixelHeight} at ${Math.round(this.post.scale * 100)}%   ${this.quality.name}   ${this.ctx.backend}   display ${Math.round(this.displayHz)} Hz\n` +
         `${f.x.toFixed(1)}, ${f.z.toFixed(1)}  alt ${f.y.toFixed(1)}   ${REGION_LABELS[this.region]}   ${this.clock.label()} day ${this.clock.day + 1}`
       );
     };
@@ -131,6 +142,9 @@ export class Game {
       const cpuMs = performance.now() - t0;
       const info = this.ctx.renderer.info.render;
       this.hud.record(frameMs, cpuMs, info.drawCalls, info.triangles);
+      if (this.params.scale === undefined && this.playing && !this.params.offscreen) {
+        this.post.setScale(this.dynRes.update(frameMs, 1000 / this.displayHz));
+      }
       this.input.endFrame();
       this.frames++;
     };
@@ -148,6 +162,8 @@ export class Game {
     this.player.update(dt, input, this.playing);
     this.physics.step(dt);
     this.player.applyToCamera(this.camera);
+    this.camera.updateMatrixWorld();
+    this.grass?.update(this.camera);
 
     const feet = this.player.feet;
     const eye = this.player.eye;
@@ -165,7 +181,7 @@ export class Game {
 
   private render(): void {
     if (this.params.offscreen) return;
-    this.ctx.renderer.render(this.scene, this.camera);
+    this.post.render();
   }
 
   private onResize(): void {
@@ -197,7 +213,7 @@ export class Game {
       triangles: s.triangles,
       backend: this.ctx.backend,
       quality: this.quality.name,
-      renderScale: this.ctx.renderScale,
+      renderScale: this.post.scale,
     };
   }
 
@@ -224,12 +240,10 @@ export class Game {
       capture: async (): Promise<string> => {
         const w = this.ctx.pixelWidth;
         const h = this.ctx.pixelHeight;
-        const target = new THREE.RenderTarget(w, h, { depthBuffer: true });
+        const target = new THREE.RenderTarget(w, h, { depthBuffer: false });
         const renderer = this.ctx.renderer;
         this.update(0);
-        renderer.setRenderTarget(target);
-        renderer.render(this.scene, this.camera);
-        renderer.setRenderTarget(null);
+        this.post.renderTo(target);
         const px = (await renderer.readRenderTargetPixelsAsync(target, 0, 0, w, h)) as Uint8Array;
         target.dispose();
         const c = document.createElement('canvas');
@@ -240,15 +254,9 @@ export class Game {
         const flip = this.ctx.backend === 'WebGL2';
         for (let y = 0; y < h; y++) {
           const src = (flip ? h - 1 - y : y) * w * 4;
-          const dst = y * w * 4;
-          for (let x = 0; x < w * 4; x += 4) {
-            for (let k = 0; k < 3; k++) {
-              const lin = px[src + x + k]! / 255;
-              img.data[dst + x + k] = Math.round(255 * (lin <= 0.0031308 ? lin * 12.92 : 1.055 * Math.pow(lin, 1 / 2.4) - 0.055));
-            }
-            img.data[dst + x + 3] = 255;
-          }
+          img.data.set(px.subarray(src, src + w * 4), y * w * 4);
         }
+        for (let i = 3; i < img.data.length; i += 4) img.data[i] = 255;
         g.putImageData(img, 0, 0);
         return c.toDataURL('image/png');
       },

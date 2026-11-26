@@ -34,6 +34,8 @@ export interface DebugParams {
    * to a canvas there.
    */
   offscreen: boolean;
+  /** Tone mapping curve to try: aces, agx, neutral or none. */
+  tone?: string;
   /** Parts of the world to leave out, for diagnosing cost: e.g. `skip=grass,shadows`. */
   skip: Set<string>;
 }
@@ -85,6 +87,7 @@ export function parseParams(search: string): DebugParams {
     scale: parseNum(q.get('scale')),
     autostart: flag('autostart'),
     offscreen: flag('offscreen'),
+    tone: q.get('tone') ?? undefined,
     skip: new Set((q.get('skip') ?? '').split(',').filter(Boolean)),
   };
 }
