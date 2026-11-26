@@ -12,6 +12,7 @@ import {
   cameraWorldMatrix,
   dot,
   float,
+  fract,
   length,
   max,
   mix,
@@ -19,12 +20,15 @@ import {
   normalize,
   positionGeometry,
   pow,
+  screenCoordinate,
   sin,
   smoothstep,
+  step,
   texture,
   transformNormalToView,
   uv,
   varyingProperty,
+  vec2,
   vec3,
   vec4,
 } from 'three/tsl';
@@ -42,7 +46,20 @@ import type { WorldTextures } from '../render/textures';
 export const TREE_FAR = 460;
 const MID_FAR = 235;
 /** Within this distance a broadleaf is drawn with real limbs, twigs and fixed leaf sprigs. */
-const CLOSE_UP = 34;
+const CLOSE_UP = 58;
+/**
+ * Where one level of detail hands over to the next, both are drawn at full size in the same
+ * place: the incoming one dissolves in over the first half of a band of distance and the outgoing
+ * one dissolves away over the second half. Nothing grows, shrinks or moves. These are half the
+ * widths (metres) of those bands.
+ */
+const BAND_CLOSE = 7;
+const BAND_NEAR = 7;
+const BAND_MID = 9;
+/** Each tree hands over this much nearer or further than the rest (metres), so a wood does not change all at once. */
+const STAGGER = 5;
+/** Trees are re-sorted only after the player has moved a little; this much slack (metres) covers the lag. */
+const SORT_SLACK = 2.5;
 
 function lin(hex: string): THREE.Color {
   return new THREE.Color(hex);
@@ -716,7 +733,7 @@ export class Trees {
       this.lods.push(row);
     }
     // The broadleaf from close by: limbs, twigs and leaf sprigs that hold still and cast their own shadows.
-    this.close = makeLod('trees-close', broadleafWood(), 160, this.material('close', true, tex, false, null), { cast: true, receive: true }, {
+    this.close = makeLod('trees-close', broadleafWood(), 900, this.material('close', true, tex, false, null), { cast: true, receive: true }, {
       geometry: leafSprigs(BROADLEAF_BLOBS),
       material: this.material('close', true, tex, 'fixed', leafTex),
       cast: true,
@@ -747,6 +764,9 @@ export class Trees {
     const vGlow = varyingProperty('vec3', 'vTreeGlow');
     const vNormal = varyingProperty('vec3', 'vTreeNormal');
     const vFacing = varyingProperty('float', 'vTreeFacing');
+    // How far this tree is through arriving from the nearer level (1 = all here) and leaving for the further one (1 = all gone).
+    const vArrived = varyingProperty('float', 'vTreeArrived');
+    const vLeft = varyingProperty('float', 'vTreeLeft');
 
     mat.positionNode = Fn(() => {
       const inst = attribute('aTree', 'vec4');
@@ -759,12 +779,37 @@ export class Trees {
       const scale = inst.w;
       const dist = length(inst.xz.sub(env.viewPos.xz));
 
-      // Each level of detail shows only in its own band of distance.
-      let lodScale;
-      if (level === 'close') lodScale = float(1).sub(smoothstep(close + 1, close + 4, dist));
-      else if (level === 0) lodScale = float(1).sub(smoothstep(near + 1, near + 5, dist)).mul(closeUp ? smoothstep(close - 1, close + 1, dist) : float(1));
-      else if (level === 1) lodScale = smoothstep(near - 1, near, dist).mul(float(1).sub(smoothstep(MID_FAR + 1, MID_FAR + 6, dist)));
-      else lodScale = smoothstep(MID_FAR - 1, MID_FAR, dist).mul(float(1).sub(smoothstep(TREE_FAR * 0.86, TREE_FAR * 0.99, dist)));
+      // Each level of detail shows only in its own band of distance. At a hand-over the incoming
+      // level dissolves in over the outgoing one, and only then does the outgoing one dissolve
+      // away (see the fragment stage), so a tree is never thinner than either of its versions.
+      // Here it is only worked out how far through each hand-over this tree is; every tree has
+      // its own offset so a row of them does not change together.
+      const d = dist.sub(seed.sub(0.5).mul(2 * STAGGER));
+      const hand = (centre: number, band: number) => ({ arriving: smoothstep(centre - band, centre, d), leaving: smoothstep(centre, centre + band, d) });
+      const toNear = hand(close, BAND_CLOSE);
+      const toMid = hand(near, BAND_NEAR);
+      const toFar = hand(MID_FAR, BAND_MID);
+      let arrived: THREE.Node<'float'>;
+      let left: THREE.Node<'float'>;
+      if (level === 'close') {
+        arrived = float(1);
+        left = toNear.leaving;
+      } else if (level === 0) {
+        arrived = closeUp ? toNear.arriving : float(1);
+        left = toMid.leaving;
+      } else if (level === 1) {
+        arrived = toMid.arriving;
+        left = toFar.leaving;
+      } else {
+        arrived = toFar.arriving;
+        left = float(0);
+      }
+      vArrived.assign(arrived);
+      vLeft.assign(left);
+      // Outside its band a level is not drawn at all. (Only at the far limit, where trees give
+      // way to the hills' canopy 460 m off, do they still shrink away.)
+      let lodScale = step(0.002, arrived).mul(step(left, 0.998));
+      if (level === 2) lodScale = lodScale.mul(float(1).sub(smoothstep(TREE_FAR * 0.86, TREE_FAR * 0.99, dist)));
 
       const stretch = vec3(1, seed.sub(0.5).mul(0.28).add(1), 1);
       const p = positionGeometry.mul(stretch).mul(scale).mul(lodScale).toVar();
@@ -819,6 +864,11 @@ export class Trees {
       return world;
     })();
 
+    // The dissolve: every pixel has a fixed threshold between 0 and 1 (a fine, even speckle), and
+    // a level draws the pixels whose threshold is below how far it has arrived and not below how
+    // far it has left. The same rule thins its shadow.
+    const speckle = fract(fract(screenCoordinate.xy.dot(vec2(0.06711056, 0.00583715))).mul(52.9829189));
+    mat.maskNode = vArrived.greaterThan(speckle).and(speckle.greaterThanEqual(vLeft));
     if (cards && leafTex) {
       const leaf = texture(leafTex, uv());
       mat.colorNode = vColor.mul(leaf.r.mul(0.75).add(0.4));
@@ -859,9 +909,14 @@ export class Trees {
     const lookingFlat = Math.abs(this.fwd.y) < 0.75;
     const ALWAYS = 95;
 
-    const near = this.nearDist + 5;
-    const close = this.closeDist;
-    const mid = MID_FAR + 6;
+    // Each level is sent every tree that could be in its band, with slack for not having
+    // re-sorted yet. (Distances here carry each tree's own offset, as in the shader.)
+    const closeEnd = this.closeDist + BAND_CLOSE + SORT_SLACK;
+    const nearStart = this.closeDist - BAND_CLOSE - SORT_SLACK;
+    const nearEnd = this.nearDist + BAND_NEAR + SORT_SLACK;
+    const midStart = this.nearDist - BAND_NEAR - SORT_SLACK;
+    const midEnd = MID_FAR + BAND_MID + SORT_SLACK;
+    const farStart = MID_FAR - BAND_MID - SORT_SLACK;
     this.close.count = 0;
     const R = TREE_FAR;
     const c0x = Math.max(0, Math.floor((cx - R - s.minX) / s.cellSize));
@@ -880,12 +935,13 @@ export class Trees {
           const d = Math.sqrt(d2);
           if (d > ALWAYS && lookingFlat && dx * fx + dz * fz < d * cosCone) continue;
           const row = this.lods[s.kind[i]!]!;
-          // Bands overlap slightly so one level fades out while the next is already there.
+          // Bands overlap so one level can dissolve out while the next is already there.
           const broadleaf = s.kind[i] !== TREE_CONIFER;
-          if (broadleaf && d < close + 4) this.push(this.close, s, i);
-          if (d < near && !(broadleaf && d < close - 2)) this.push(row[0]!, s, i);
-          if (d >= near - 6 && d < mid) this.push(row[1]!, s, i);
-          if (d >= mid - 7) this.push(row[2]!, s, i);
+          const ds = d - (s.seed[i]! - 0.5) * 2 * STAGGER;
+          if (broadleaf && ds < closeEnd) this.push(this.close, s, i);
+          if (ds < nearEnd && !(broadleaf && ds < nearStart)) this.push(row[0]!, s, i);
+          if (ds >= midStart && ds < midEnd) this.push(row[1]!, s, i);
+          if (ds >= farStart) this.push(row[2]!, s, i);
         }
       }
     }
