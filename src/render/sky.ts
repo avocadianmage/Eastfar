@@ -167,8 +167,8 @@ export class Sky {
       s.camera.bottom = -d;
       s.camera.near = 1;
       s.camera.far = 420;
-      s.bias = -0.0006;
-      s.normalBias = 0.06;
+      s.bias = -0.0003;
+      s.normalBias = 0.04;
       s.radius = 2.5;
       // Shadows keep some of the light: painterly shade is blue and readable, never black.
       s.intensity = 0.86;

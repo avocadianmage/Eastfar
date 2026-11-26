@@ -174,6 +174,10 @@ export class TerrainMesh {
       const beyondTrees = smoothstep(treeFar * 0.8, treeFar * 0.97, dist);
       c.assign(mix(c, canopyCol, beyondTrees.mul(smoothstep(0.15, 0.6, m2.r))));
 
+      // Roads and paths: packed earth with a scatter of pebbles, worn pale down the middle.
+      const pathCol = mix(col('#7d6a50'), col('#a8946f'), blotch.mul(0.5).add(fine.mul(0.5)));
+      c.assign(mix(c, pathCol, smoothstep(0.25, 0.7, m2.b.add(fine.sub(0.5).mul(0.3)))));
+
       c.assign(mix(c, bed, smoothstep(0.15, 0.7, m.b)));
       c.mulAssign(mix(float(0.7), float(1.14), occl));
       c.mulAssign(fine.mul(0.16).add(0.92));

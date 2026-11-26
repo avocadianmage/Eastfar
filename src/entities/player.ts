@@ -59,7 +59,9 @@ export class Player {
 
   /** Put the player on the ground at a position. */
   teleport(x: number, z: number, yawDeg?: number, pitchDeg?: number): void {
-    const y = heightAt(this.terrain, x, z);
+    // Stand on whatever is there: a floor or bridge deck if one is just above the ground.
+    const ground = heightAt(this.terrain, x, z);
+    const y = this.physics.groundBelow(x, ground + 2.3, z, 6) ?? ground;
     this.feet.set(x, y, z);
     this.physics.teleportFeet(x, y, z);
     this.velocity.set(0, 0, 0);

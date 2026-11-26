@@ -4,6 +4,7 @@
  * the same in the game, in tests and in a worker.
  */
 import { clamp, fbm2, lerp, smoothstep, valueNoise2 } from '../core/rng';
+import { BRIDGE, BUILDINGS, PATHS, footprintSdf, pathSdf } from './buildings';
 import { buildCreek, type CreekSample } from './creek';
 import { MEADOW, STATUE, TERRAIN, VILLAGE, WORLD_SEED, eastOpening, farmsSdf, playableSdf } from './layout';
 
@@ -14,6 +15,7 @@ export const MASK_FLOWERS = 3;
 /** Channels of the second mask texture. */
 export const MASK2_FOREST = 0;
 export const MASK2_CONIFER = 1;
+export const MASK2_PATH = 2;
 
 const FAR = 1e6;
 
@@ -29,8 +31,12 @@ export interface TerrainData {
   readonly normals: Uint8Array;
   /** RGBA8 per sample: grass height, bare dirt, wetness, flower density. */
   readonly masks: Uint8Array;
-  /** RGBA8 per sample: tree cover, share of conifers, (two spare channels). */
+  /** RGBA8 per sample: tree cover, share of conifers, road or path, (one spare channel). */
   readonly masks2: Uint8Array;
+  /** Height of the bridge deck where the East Road crosses the creek. */
+  readonly bridgeDeck: number;
+  /** Levelled ground height under each building, by building id. */
+  readonly buildingGround: Record<string, number>;
   readonly creek: CreekSample[];
   /** Distance in metres to the creek centreline (very large when far away). */
   readonly creekDist: Float32Array;
@@ -90,6 +96,25 @@ export function bakeTerrain(): TerrainData {
     }
   }
 
+  // --- Level the ground under each building, easing back into the land around it. ---
+  const buildingGround: Record<string, number> = {};
+  for (const b of BUILDINGS) {
+    const base = baseGround(b.x, b.z);
+    buildingGround[b.id] = base;
+    const reach = Math.hypot(b.width, b.depth) / 2 + 7;
+    const ix0 = Math.max(0, Math.floor((b.x - reach - minX) / cell));
+    const ix1 = Math.min(n - 1, Math.ceil((b.x + reach - minX) / cell));
+    const iz0 = Math.max(0, Math.floor((b.z - reach - minZ) / cell));
+    const iz1 = Math.min(n - 1, Math.ceil((b.z + reach - minZ) / cell));
+    for (let iz = iz0; iz <= iz1; iz++) {
+      for (let ix = ix0; ix <= ix1; ix++) {
+        const d = footprintSdf(b, minX + ix * cell, minZ + iz * cell);
+        const i = iz * n + ix;
+        heights[i] = lerp(base, heights[i]!, smoothstep(2.2, 7, d));
+      }
+    }
+  }
+
   // --- Creek: find each nearby cell's closest point on the centreline. ---
   const creek = buildCreek(baseGround);
   const creekDist = new Float32Array(count).fill(FAR);
@@ -136,6 +161,39 @@ export function bakeTerrain(): TerrainData {
       h = lerp(side, natural, smoothstep(hw + 3, hw + 36, d));
     }
     heights[i] = h;
+  }
+
+  // --- Bridge: the road climbs onto raised banks either side of the creek. ---
+  let bridgeLevel = 0;
+  {
+    const bi = clamp(Math.round((BRIDGE.z - minZ) / cell), 0, n - 1) * n + clamp(Math.round((BRIDGE.x - minX) / cell), 0, n - 1);
+    bridgeLevel = creekLevel[bi]!;
+  }
+  const bridgeDeck = bridgeLevel + 0.95;
+  const road = PATHS.find((p) => p.id === 'east_road')!;
+  {
+    const R = 26;
+    const ix0 = Math.max(0, Math.floor((BRIDGE.x - R - minX) / cell));
+    const ix1 = Math.min(n - 1, Math.ceil((BRIDGE.x + R - minX) / cell));
+    const iz0 = Math.max(0, Math.floor((BRIDGE.z - R - minZ) / cell));
+    const iz1 = Math.min(n - 1, Math.ceil((BRIDGE.z + R - minZ) / cell));
+    for (let iz = iz0; iz <= iz1; iz++) {
+      for (let ix = ix0; ix <= ix1; ix++) {
+        const i = iz * n + ix;
+        const d = creekDist[i]!;
+        if (d >= FAR) continue;
+        const hw = creekHalfWidth[i]!;
+        const x = minX + ix * cell;
+        const z = minZ + iz * cell;
+        // Distance from the road's centreline near the bridge (the road runs almost due east here).
+        const across = Math.abs(z - (BRIDGE.z + (x - BRIDGE.x) * Math.tan(BRIDGE.yaw)));
+        const onRoad = 1 - smoothstep(road.width / 2 + 0.6, road.width / 2 + 4.5, across);
+        if (onRoad <= 0) continue;
+        const along = smoothstep(hw + 1.6, hw + 3.4, d) * (1 - smoothstep(hw + 5, hw + 19, d));
+        const lift = along * onRoad;
+        heights[i] = lerp(heights[i]!, Math.max(heights[i]!, bridgeDeck - 0.06), lift);
+      }
+    }
   }
 
   // --- Normals and hollow shading. ---
@@ -261,18 +319,43 @@ export function bakeTerrain(): TerrainData {
       const h = heights[i]!;
       const conifer = clamp(smoothstep(34, 62, h) * 0.75 + open * 0.85 + fbm2(x / 130, z / 130, 2, seed + 950) * 0.3 - 0.05, 0, 1) * (0.25 + 0.75 * wild);
 
+      // Roads, paths and buildings: bare earth, no trees, no flowers.
+      let path = 0;
+      let built = 0;
+      if (sdf < 60) {
+        const pd = pathSdf(x, z);
+        path = 1 - smoothstep(-0.25, 0.55, pd);
+        forest *= smoothstep(1.5, 4, pd);
+        // The village green: trodden earth around the well where the roads meet.
+        const green = Math.hypot(x - 2, z - 1);
+        path = Math.max(path, (1 - smoothstep(5.5, 9, green)) * 0.85);
+        if (Math.abs(x) < 80 && Math.abs(z) < 90) {
+          for (const b of BUILDINGS) {
+            const fd = footprintSdf(b, x, z);
+            if (fd < 8) {
+              built = Math.max(built, 1 - smoothstep(0.2, 0.9, fd));
+              forest *= smoothstep(2.5, 6, fd);
+              // A worn apron of earth around each house.
+              path = Math.max(path, (1 - smoothstep(0.3, 2.2, fd)) * 0.7);
+            }
+          }
+        }
+      }
+
       const o = i * 4;
       masks2[o + MASK2_FOREST] = Math.round(clamp(forest, 0, 1) * 255);
       masks2[o + MASK2_CONIFER] = Math.round(conifer * 255);
+      masks2[o + MASK2_PATH] = Math.round(clamp(path, 0, 1) * 255);
 
-      // Under trees the grass is short and patchy and few flowers grow.
+      // Under trees the grass is short and patchy and few flowers grow; none on paths or under floors.
       const shade = smoothstep(0.3, 0.9, forest);
-      masks[o + MASK_GRASS] = Math.round(masks[o + MASK_GRASS]! * (1 - 0.6 * shade));
-      masks[o + MASK_FLOWERS] = Math.round(masks[o + MASK_FLOWERS]! * (1 - 0.8 * shade));
+      const clear = (1 - smoothstep(0.25, 0.75, path)) * (1 - built);
+      masks[o + MASK_GRASS] = Math.round(masks[o + MASK_GRASS]! * (1 - 0.6 * shade) * clear);
+      masks[o + MASK_FLOWERS] = Math.round(masks[o + MASK_FLOWERS]! * (1 - 0.8 * shade) * clear);
     }
   }
 
-  return { n, cell, minX, minZ, size, heights, normals, masks, masks2, creek, creekDist, creekLevel, creekHalfWidth };
+  return { n, cell, minX, minZ, size, heights, normals, masks, masks2, bridgeDeck, buildingGround, creek, creekDist, creekLevel, creekHalfWidth };
 }
 
 /** Bilinear ground height at a world position (clamped at the edge of the grid). */

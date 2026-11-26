@@ -7,6 +7,7 @@
  * Each argument is name=query; the query uses the debug URL parameters from
  * src/core/params.ts. `freeze`, `autostart` and `nosave` are always added.
  * Options: --size=1280x720  --out=shots  --frames=8  --webgpu  --hud  --full
+ *          --eval="js to run in the page before capturing"
  */
 import { createServer } from 'node:http';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
@@ -28,12 +29,13 @@ const MIME = {
 };
 
 const args = process.argv.slice(2);
-const opts = { size: '1280x720', out: 'shots', frames: '8', webgpu: false, hud: false, full: false, readback: false };
+const opts = { size: '1280x720', out: 'shots', frames: '8', webgpu: false, hud: false, full: false, readback: false, eval: '' };
 const shots = [];
 for (const a of args) {
   if (a.startsWith('--')) {
-    const [k, v] = a.slice(2).split('=');
-    opts[k] = v ?? true;
+    const eq = a.indexOf('=');
+    if (eq < 0) opts[a.slice(2)] = true;
+    else opts[a.slice(2, eq)] = a.slice(eq + 1);
   } else {
     const i = a.indexOf('=');
     shots.push({ name: a.slice(0, i), query: a.slice(i + 1) });
@@ -86,6 +88,12 @@ for (const s of shots) {
     if (err) throw new Error(err);
     const target = Number(opts.frames);
     await page.waitForFunction((n) => window.__eastfar.state().frames >= n, target, { timeout: 240000 });
+    if (opts.eval) {
+      // Run a snippet in the page first (e.g. open doors), then let a few frames pass.
+      await page.evaluate(opts.eval);
+      const f0 = await page.evaluate(() => window.__eastfar.state().frames);
+      await page.waitForFunction((n) => window.__eastfar.state().frames >= n, f0 + 3, { timeout: 240000 });
+    }
     const state = await page.evaluate(() => window.__eastfar.state());
     const file = join(opts.out, `${s.name}.png`);
     if (opts.webgpu || opts.readback) {

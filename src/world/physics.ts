@@ -100,6 +100,16 @@ export class Physics {
     this.world.step();
   }
 
+  /**
+   * Height of the first solid surface below a point (terrain, a floor, a bridge deck),
+   * or null if there is none within `maxDrop`.
+   */
+  groundBelow(x: number, yStart: number, z: number, maxDrop = 60): number | null {
+    const ray = new RAPIER.Ray({ x, y: yStart, z }, { x: 0, y: -1, z: 0 });
+    const hit = this.world.castRay(ray, maxDrop, true, undefined, undefined, this.playerCollider);
+    return hit ? yStart - hit.timeOfImpact : null;
+  }
+
   /** Add an immovable box (centre, half-extents, rotation about y in radians). */
   addStaticBox(cx: number, cy: number, cz: number, hx: number, hy: number, hz: number, yaw = 0): RAPIER.Collider {
     const d = RAPIER.ColliderDesc.cuboid(hx, hy, hz).setTranslation(cx, cy, cz);

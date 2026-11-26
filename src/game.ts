@@ -3,6 +3,7 @@
  */
 import * as THREE from 'three/webgpu';
 import { Ambience } from './audio/ambience';
+import { Village } from './buildings/village';
 import { GameClock } from './core/clock';
 import { Input, type Action } from './core/input';
 import type { DebugParams } from './core/params';
@@ -67,6 +68,7 @@ export class Game {
   flowers?: Flowers;
   rocks?: Rocks;
   fireflies?: Fireflies;
+  village?: Village;
   post!: Post;
   private dynRes!: DynamicResolution;
 
@@ -115,6 +117,7 @@ export class Game {
     this.physics = await Physics.create(this.terrain);
     if (!skip.has('trees')) this.trees = new Trees(this.scene, this.terrain, this.textures, this.quality, this.physics);
     if (!skip.has('rocks')) this.rocks = new Rocks(this.scene, this.terrain, this.textures, this.physics);
+    if (!skip.has('village')) this.village = new Village(this.scene, this.terrain, this.textures, this.physics);
     this.player = new Player(this.physics, this.terrain);
     this.player.fly = this.params.fly;
     this.player.onFootstep = (strength) => this.audio.step(this.player.wading > 0.06 ? 'water' : 'grass', strength);
@@ -123,6 +126,7 @@ export class Game {
     const p = this.params;
     const [sx, sz] = p.pos ?? [SPAWN.x, SPAWN.z];
     this.player.teleport(sx, sz, p.yaw ?? SPAWN.yawDeg, p.pitch ?? 0);
+    if (p.fly && p.alt) this.player.feet.y += p.alt;
     if (p.time !== undefined) this.clock.setHour(p.time);
     this.clock.frozen = p.freeze;
     this.region = regionAt(sx, sz);
@@ -184,6 +188,7 @@ export class Game {
     this.grass?.update(this.camera);
     this.trees?.update(this.camera);
     this.flowers?.update(this.camera);
+    this.village?.update(dt, this.player.eye, this.player.feet, this.animTime, this.sky.tod.dayFactor);
 
     const feet = this.player.feet;
     const eye = this.player.eye;
@@ -269,6 +274,8 @@ export class Game {
   debugApi() {
     return {
       ready: true,
+      /** The game object itself, for poking at from the browser console. */
+      game: this as Game,
       state: () => this.state(),
       teleport: (x: number, z: number, yawDeg?: number, pitchDeg?: number) => this.player.teleport(x, z, yawDeg, pitchDeg),
       setTime: (hour: number) => this.clock.setHour(hour),
@@ -297,6 +304,10 @@ export class Game {
         return best < 0 ? null : { x: s.x[best]!, y: s.y[best]!, z: s.z[best]!, kind: s.kind[best]!, scale: s.scale[best]!, dist: bd };
       },
       treeCounts: () => this.trees?.counts() ?? [0, 0, 0],
+      /** Open or close every door (for screenshots and tests). */
+      setDoors: (open: boolean) => {
+        for (const d of this.village?.doors ?? []) if (d.open !== open) this.village!.toggleDoor(d);
+      },
       /**
        * Render a frame off-screen and return it as a PNG data URL. Reads pixels
        * straight from the GPU, so it works where page screenshots cannot see

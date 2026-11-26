@@ -20,6 +20,8 @@ export interface DebugParams {
   hud: boolean;
   /** Free-fly camera with no collision. */
   fly: boolean;
+  /** With `fly`: start this many metres above the ground. */
+  alt?: number;
   /** Ignore and do not write saved games. */
   nosave: boolean;
   /** Force a rendering backend. */
@@ -82,6 +84,7 @@ export function parseParams(search: string): DebugParams {
     freeze: flag('freeze'),
     hud: flag('hud'),
     fly: flag('fly'),
+    alt: parseNum(q.get('alt')),
     nosave: flag('nosave'),
     backend: backend === 'webgl' || backend === 'webgpu' ? backend : undefined,
     scale: parseNum(q.get('scale')),
