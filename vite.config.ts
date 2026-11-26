@@ -12,5 +12,8 @@ export default defineConfig({
   test: {
     include: ['tests/unit/**/*.test.ts'],
     environment: 'node',
+    // Build machines can be several times slower than a desk machine; the tests check results, not speed.
+    testTimeout: 30_000,
+    hookTimeout: 60_000,
   },
 });

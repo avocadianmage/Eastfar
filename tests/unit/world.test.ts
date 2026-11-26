@@ -22,11 +22,14 @@ describe('terrain', () => {
   it('has finite heights everywhere', () => {
     let min = Infinity;
     let max = -Infinity;
+    let bad = 0;
     for (const h of terrain.heights) {
-      expect(Number.isFinite(h)).toBe(true);
+      // Counted, not asserted one by one: a million assertions is slow enough to time out on a busy machine.
+      if (!Number.isFinite(h)) bad++;
       if (h < min) min = h;
       if (h > max) max = h;
     }
+    expect(bad).toBe(0);
     expect(min).toBeGreaterThan(-20);
     expect(max).toBeLessThan(260);
   });
