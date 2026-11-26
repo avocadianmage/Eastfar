@@ -372,9 +372,13 @@ function broadleafWood(): THREE.BufferGeometry {
 /**
  * Leaves for the close-up broadleaf: sprigs set through the whole volume of
  * each leaf mass at fixed angles (not turned to the camera), so they hold
- * still as the player walks under them and cast real shadows.
+ * still as the player walks under them.
+ *
+ * Called with fewer, larger sprigs it also makes the leaves that cast the
+ * crown's shadow: the shadow map cannot show a sprig's detail, so a sixth as
+ * many cast a shadow that looks the same.
  */
-function leafSprigs(blobs: [number, number, number, number][]): THREE.BufferGeometry {
+function leafSprigs(blobs: [number, number, number, number][], outer = 34, inner = 12, crossed = true, sizeMul = 1): THREE.BufferGeometry {
   const rnd = mulberry32(8123);
   const pos: number[] = [];
   const uvs: number[] = [];
@@ -412,16 +416,14 @@ function leafSprigs(blobs: [number, number, number, number][]): THREE.BufferGeom
   };
   for (const [bx, by, bz, br] of blobs) {
     // Outer shell first, then leaves deeper in.
-    const OUTER = 34;
-    const INNER = 12;
-    for (let k = 0; k < OUTER + INNER; k++) {
-      const inner = k >= OUTER;
-      const count = inner ? INNER : OUTER;
-      const j = inner ? k - OUTER : k;
-      const yy = 1 - ((j + 0.5) / count) * (inner ? 2 : 1.8);
+    for (let k = 0; k < outer + inner; k++) {
+      const deep = k >= outer;
+      const count = deep ? inner : outer;
+      const j = deep ? k - outer : k;
+      const yy = 1 - ((j + 0.5) / count) * (deep ? 2 : 1.8);
       const rad = Math.sqrt(Math.max(0, 1 - yy * yy));
-      const a = j * 2.399963 + rnd() * 0.7 + (inner ? 1.3 : 0);
-      const r = br * (inner ? 0.3 + rnd() * 0.4 : 0.8 + rnd() * 0.26);
+      const a = j * 2.399963 + rnd() * 0.7 + (deep ? 1.3 : 0);
+      const r = br * (deep ? 0.3 + rnd() * 0.4 : 0.8 + rnd() * 0.26);
       const dx = Math.cos(a) * rad;
       const dz = Math.sin(a) * rad;
       const px = bx + dx * r;
@@ -433,17 +435,17 @@ function leafSprigs(blobs: [number, number, number, number][]): THREE.BufferGeom
       n.normalize();
       const sky = Math.pow(Math.max(0, n.y * 0.5 + 0.5), 1.25);
       c.copy(LEAF_DARK).lerp(LEAF_LIGHT, Math.min(1, sky * 0.9 + rnd() * 0.25));
-      if (inner) c.multiplyScalar(0.62);
+      if (deep) c.multiplyScalar(0.62);
       // Each sprig faces roughly outward from its mass, tipped a random way.
       face.set(dx + (rnd() - 0.5) * 1.5, yy * 0.86 + (rnd() - 0.5) * 1.5, dz + (rnd() - 0.5) * 1.5).normalize();
       U.set(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).cross(face);
       if (U.lengthSq() < 1e-4) U.set(1, 0, 0).cross(face);
       U.normalize();
       V.copy(face).cross(U);
-      const size = (inner ? 1.3 + rnd() * 0.6 : 1.25 + rnd() * 0.7) * (0.78 + br * 0.1);
+      const size = (deep ? 1.3 + rnd() * 0.6 : 1.25 + rnd() * 0.7) * (0.78 + br * 0.1) * sizeMul;
       // Tiles of the leaf sheet: mostly full clusters, some open sprigs.
       quad(px, py, pz, size, rnd() < 0.6 ? 0 : 1 + Math.floor(rnd() * 3));
-      if (!inner) {
+      if (!deep && crossed) {
         // A second sprig at right angles through the same spot, so the outside of the crown
         // looks full from every side (one seen edge-on fades out; its partner is then face-on).
         face.copy(U);
@@ -640,9 +642,8 @@ interface Lod {
   attrB: THREE.InstancedBufferAttribute;
   capacity: number;
   count: number;
-  /** Extra geometry drawn with the same instances (leaf cards). */
-  extra?: THREE.InstancedBufferGeometry;
-  extraMesh?: THREE.Mesh;
+  /** More geometry drawn with the same instances (leaves, and the leaves that cast the shadow). */
+  extras: { geometry: THREE.InstancedBufferGeometry; mesh: THREE.Mesh }[];
 }
 
 export class Trees {
@@ -673,7 +674,7 @@ export class Trees {
       capacity: number,
       material: THREE.Material,
       shadows: { cast: boolean; receive: boolean },
-      leaves?: { geometry: THREE.BufferGeometry; material: THREE.Material; cast: boolean; receive: boolean },
+      extras: { suffix: string; geometry: THREE.BufferGeometry; material: THREE.Material; cast: boolean; receive: boolean }[] = [],
     ): Lod => {
       const g = new THREE.InstancedBufferGeometry();
       for (const attr of ['position', 'normal', 'color', 'aWind']) g.setAttribute(attr, base.getAttribute(attr));
@@ -693,25 +694,24 @@ export class Trees {
       mesh.receiveShadow = shadows.receive;
       mesh.name = name;
       scene.add(mesh);
-      const lod: Lod = { mesh, geometry: g, a, b, attrA, attrB, capacity, count: 0 };
-      if (leaves) {
+      const lod: Lod = { mesh, geometry: g, a, b, attrA, attrB, capacity, count: 0, extras: [] };
+      for (const extra of extras) {
         const cg = new THREE.InstancedBufferGeometry();
         for (const attr of ['position', 'aCorner', 'aFace', 'uv', 'normal', 'color', 'aWind']) {
-          if (leaves.geometry.hasAttribute(attr)) cg.setAttribute(attr, leaves.geometry.getAttribute(attr));
+          if (extra.geometry.hasAttribute(attr)) cg.setAttribute(attr, extra.geometry.getAttribute(attr));
         }
-        cg.setIndex(leaves.geometry.getIndex());
+        cg.setIndex(extra.geometry.getIndex());
         cg.setAttribute('aTree', attrA);
         cg.setAttribute('aTree2', attrB);
         cg.instanceCount = 0;
         cg.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6);
-        const cm = new THREE.Mesh(cg, leaves.material);
+        const cm = new THREE.Mesh(cg, extra.material);
         cm.frustumCulled = false;
-        cm.castShadow = leaves.cast;
-        cm.receiveShadow = leaves.receive;
-        cm.name = `${name}-leaves`;
+        cm.castShadow = extra.cast;
+        cm.receiveShadow = extra.receive;
+        cm.name = `${name}-${extra.suffix}`;
         scene.add(cm);
-        lod.extra = cg;
-        lod.extraMesh = cm;
+        lod.extras.push({ geometry: cg, mesh: cm });
       }
       return lod;
     };
@@ -723,26 +723,29 @@ export class Trees {
         // Leaf cards share the broadleaf's instances: many small ones nearby, a few big ones further off.
         const leaves =
           kind === 0 && level < 2
-            ? {
-                geometry: level === 0 ? leafCards(BROADLEAF_BLOBS, 26, 1) : leafCards(BROADLEAF_BLOBS_MID, 6, 2.1),
-                material: this.material(level, kind === 0, tex, 'facing', leafTex),
-                cast: false,
-                receive: level === 0,
-              }
-            : undefined;
+            ? [
+                {
+                  suffix: 'leaves',
+                  geometry: level === 0 ? leafCards(BROADLEAF_BLOBS, 26, 1) : leafCards(BROADLEAF_BLOBS_MID, 6, 2.1),
+                  material: this.material(level, kind === 0, tex, 'facing', leafTex),
+                  cast: false,
+                  receive: level === 0,
+                },
+              ]
+            : [];
         row.push(
           makeLod(`trees-${kind}-${level}`, builders[kind]!(level), caps[level]!, this.material(level, kind === 0, tex, false, null), { cast: level === 0, receive: level < 2 }, leaves),
         );
       }
       this.lods.push(row);
     }
-    // The broadleaf from close by: limbs, twigs and leaf sprigs that hold still and cast their own shadows.
-    this.close = makeLod('trees-close', broadleafWood(), 900, this.material('close', true, tex, false, null), { cast: true, receive: true }, {
-      geometry: leafSprigs(BROADLEAF_BLOBS),
-      material: this.material('close', true, tex, 'fixed', leafTex),
-      cast: true,
-      receive: true,
-    });
+    // The broadleaf from close by: limbs, twigs and leaf sprigs that hold still. The sprigs do not
+    // cast the crown's shadow themselves: a sixth as many, larger, do it for them (drawn only into
+    // the shadow map), which halves what a close-up tree costs there.
+    this.close = makeLod('trees-close', broadleafWood(), 400, this.material('close', true, tex, false, null), { cast: true, receive: true }, [
+      { suffix: 'leaves', geometry: leafSprigs(BROADLEAF_BLOBS), material: this.material('close', true, tex, 'fixed', leafTex), cast: false, receive: true },
+      { suffix: 'shade', geometry: leafSprigs(BROADLEAF_BLOBS, 10, 3, false, 1.75), material: this.material('close', true, tex, 'shade', leafTex), cast: true, receive: false },
+    ]);
 
     // Solid trunks, but only where the player can actually walk.
     if (physics) {
@@ -758,9 +761,9 @@ export class Trees {
   /**
    * @param level 0 near, 1 middle, 2 far, or 'close' for the close-up broadleaf
    * @param closeUp true where the nearest trees of this kind are drawn by a close-up version instead
-   * @param cards 'facing' for leaf cards that turn to the camera, 'fixed' for sprigs that do not
+   * @param cards 'facing' for leaf cards that turn to the camera, 'fixed' for sprigs that do not, 'shade' for sprigs drawn only into the shadow map
    */
-  private material(level: 0 | 1 | 2 | 'close', closeUp: boolean, tex: WorldTextures, cards: false | 'facing' | 'fixed', leafTex: THREE.Texture | null): THREE.MeshLambertNodeMaterial {
+  private material(level: 0 | 1 | 2 | 'close', closeUp: boolean, tex: WorldTextures, cards: false | 'facing' | 'fixed' | 'shade', leafTex: THREE.Texture | null): THREE.MeshLambertNodeMaterial {
     const mat = new THREE.MeshLambertNodeMaterial();
     const near = this.nearDist;
     const close = this.closeDist;
@@ -772,7 +775,7 @@ export class Trees {
     const vArrived = varyingProperty('float', 'vTreeArrived');
     const vLeft = varyingProperty('float', 'vTreeLeft');
 
-    mat.positionNode = Fn(() => {
+    const place = Fn(() => {
       const inst = attribute('aTree', 'vec4');
       const inst2 = attribute('aTree2', 'vec4');
       const wind = attribute('aWind', 'vec2');
@@ -872,7 +875,17 @@ export class Trees {
     // a level draws the pixels whose threshold is below how far it has arrived and not below how
     // far it has left. The same rule thins its shadow.
     const speckle = fract(fract(screenCoordinate.xy.dot(vec2(0.06711056, 0.00583715))).mul(52.9829189));
-    mat.maskNode = vArrived.greaterThan(speckle).and(speckle.greaterThanEqual(vLeft));
+    const dissolve = vArrived.greaterThan(speckle).and(speckle.greaterThanEqual(vLeft));
+    if (cards === 'shade' && leafTex) {
+      // Only the shadow map sees these: in the picture itself every corner is put in one spot far below the ground.
+      mat.positionNode = vec3(0, -1e5, 0);
+      mat.castShadowPositionNode = place;
+      mat.maskShadowNode = dissolve.and(texture(leafTex, uv()).a.greaterThan(0.4));
+      mat.side = THREE.DoubleSide;
+      return mat;
+    }
+    mat.positionNode = place;
+    mat.maskNode = dissolve;
     if (cards && leafTex) {
       const leaf = texture(leafTex, uv());
       mat.colorNode = vColor.mul(leaf.r.mul(0.75).add(0.4));
@@ -965,9 +978,9 @@ export class Trees {
       {
         l.geometry.instanceCount = l.count;
         l.mesh.visible = l.count > 0;
-        if (l.extra && l.extraMesh) {
-          l.extra.instanceCount = l.count;
-          l.extraMesh.visible = l.count > 0;
+        for (const extra of l.extras) {
+          extra.geometry.instanceCount = l.count;
+          extra.mesh.visible = l.count > 0;
         }
         if (l.count > 0) {
           l.attrA.clearUpdateRanges();

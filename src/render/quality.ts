@@ -19,7 +19,7 @@ export interface Quality {
   flowerDensity: number;
   /** Detailed trees are drawn within this distance; simple ones beyond. */
   treeDetailDistance: number;
-  /** Broadleaves are drawn in full (limbs, twigs, leaf sprigs) within about this distance. Costly: about 3,900 triangles a tree with its shadow. */
+  /** Broadleaves are drawn in full (limbs, twigs, leaf sprigs) within about this distance. Costly: about 3,000 triangles a tree with its shadow. */
   treeCloseDistance: number;
   bloom: boolean;
   /** Multisample anti-aliasing samples for the scene (0 = off). */
@@ -58,7 +58,7 @@ export const QUALITY: Record<QualityName, Quality> = {
     grassDistance: 100,
     flowerDensity: 0.75,
     treeDetailDistance: 80,
-    treeCloseDistance: 34,
+    treeCloseDistance: 38,
     bloom: true,
     msaa: 2,
     terrainRing: 64,
@@ -75,7 +75,7 @@ export const QUALITY: Record<QualityName, Quality> = {
     grassDistance: 130,
     flowerDensity: 1,
     treeDetailDistance: 110,
-    treeCloseDistance: 36,
+    treeCloseDistance: 44,
     bloom: true,
     msaa: 4,
     terrainRing: 64,

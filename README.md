@@ -67,7 +67,7 @@ Append to the URL, e.g. `?time=22:30&pos=40,-330&yaw=45&hud&freeze`.
 | `skip=a,b` | Leave parts out to measure their cost (`terrain`, `sky`, `fog`, `shadows`, `grass`, `flowers`, `trees`, `rocks`, `water`, `village`, `npcs`, `bees`, `crows`, `scarecrows`, `fireflies`, `butterflies`, `bloom`, ...) |
 | `alt=metres` | With `fly`: start this high above the ground |
 | `audio=synth` | Use the synthesised sounds only, not the recordings (to compare) |
-| `treeclose=metres` | Draw trees in full detail out to this distance instead of the preset's (36 m on High, 58 m on Ultra), to try the cost with `hud` |
+| `treeclose=metres` | Draw trees in full detail out to this distance instead of the preset's (44 m on High, 58 m on Ultra), to try the cost with `hud` |
 | `autostart`, `nosave`, `offscreen` | For automated tests and screenshots |
 
 ### Assets
