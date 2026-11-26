@@ -1,0 +1,110 @@
+/** Graphics presets. "High" is the 120 FPS target on a mid-range gaming GPU. */
+import type { QualityName } from '../core/params';
+
+export interface Quality {
+  name: QualityName;
+  /** Upper limit for the fraction of native resolution rendered. */
+  maxRenderScale: number;
+  /** Cap on device pixel ratio, so 4K/retina screens do not quadruple the cost. */
+  maxPixelRatio: number;
+  shadows: boolean;
+  shadowMapSize: number;
+  /** Distance from the player that casts and receives sun/moon shadows. */
+  shadowDistance: number;
+  /** Multiplier on the number of grass blades. */
+  grassDensity: number;
+  /** How far grass is drawn, in metres. */
+  grassDistance: number;
+  /** Multiplier on flower counts. */
+  flowerDensity: number;
+  /** Detailed trees are drawn within this distance; simple ones beyond. */
+  treeDetailDistance: number;
+  bloom: boolean;
+  /** Terrain grid resolution (quads per side of each detail ring). */
+  terrainRing: number;
+  fireflies: number;
+}
+
+export const QUALITY: Record<QualityName, Quality> = {
+  low: {
+    name: 'low',
+    maxRenderScale: 0.8,
+    maxPixelRatio: 1,
+    shadows: false,
+    shadowMapSize: 1024,
+    shadowDistance: 40,
+    grassDensity: 0.4,
+    grassDistance: 70,
+    flowerDensity: 0.5,
+    treeDetailDistance: 50,
+    bloom: false,
+    terrainRing: 48,
+    fireflies: 150,
+  },
+  medium: {
+    name: 'medium',
+    maxRenderScale: 1,
+    maxPixelRatio: 1,
+    shadows: true,
+    shadowMapSize: 2048,
+    shadowDistance: 55,
+    grassDensity: 0.7,
+    grassDistance: 100,
+    flowerDensity: 0.75,
+    treeDetailDistance: 80,
+    bloom: true,
+    terrainRing: 64,
+    fireflies: 300,
+  },
+  high: {
+    name: 'high',
+    maxRenderScale: 1,
+    maxPixelRatio: 1.5,
+    shadows: true,
+    shadowMapSize: 2048,
+    shadowDistance: 75,
+    grassDensity: 1,
+    grassDistance: 130,
+    flowerDensity: 1,
+    treeDetailDistance: 110,
+    bloom: true,
+    terrainRing: 64,
+    fireflies: 500,
+  },
+  ultra: {
+    name: 'ultra',
+    maxRenderScale: 1,
+    maxPixelRatio: 2,
+    shadows: true,
+    shadowMapSize: 4096,
+    shadowDistance: 100,
+    grassDensity: 1.5,
+    grassDistance: 170,
+    flowerDensity: 1.4,
+    treeDetailDistance: 150,
+    bloom: true,
+    terrainRing: 96,
+    fireflies: 800,
+  },
+};
+
+const STORAGE_KEY = 'eastfar.quality';
+
+export function loadQualityName(override?: QualityName): QualityName {
+  if (override) return override;
+  try {
+    const v = localStorage.getItem(STORAGE_KEY) as QualityName | null;
+    if (v && v in QUALITY) return v;
+  } catch {
+    /* storage unavailable */
+  }
+  return 'high';
+}
+
+export function saveQualityName(name: QualityName): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, name);
+  } catch {
+    /* storage unavailable */
+  }
+}

@@ -1,0 +1,158 @@
+:root {
+  --ink: #f3ead8;
+  --ink-dim: #c9bfa8;
+  --panel: rgba(18, 22, 30, 0.72);
+  --line: rgba(243, 234, 216, 0.22);
+  --accent: #e8c170;
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #0b0f17;
+  color: var(--ink);
+}
+
+#game {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  outline: none;
+}
+
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+#overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(ellipse at center, rgba(8, 11, 18, 0.35), rgba(8, 11, 18, 0.82));
+  pointer-events: auto;
+  transition: opacity 0.4s ease;
+}
+
+#overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#overlay.loading {
+  background: #0b0f17;
+}
+
+.panel {
+  text-align: center;
+  padding: 2.4rem 3rem;
+  max-width: 34rem;
+}
+
+.panel h1 {
+  margin: 0;
+  font-size: clamp(3rem, 9vw, 5.5rem);
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.6);
+}
+
+.tagline {
+  margin: 0.4rem 0 2rem;
+  font-style: italic;
+  color: var(--ink-dim);
+  font-size: 1.1rem;
+}
+
+#status {
+  color: var(--ink-dim);
+  min-height: 1.4em;
+}
+
+#begin {
+  font: inherit;
+  font-size: 1.25rem;
+  letter-spacing: 0.12em;
+  color: var(--ink);
+  background: rgba(232, 193, 112, 0.12);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  padding: 0.7rem 2.6rem;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    transform 0.1s;
+}
+
+#begin:hover {
+  background: rgba(232, 193, 112, 0.26);
+}
+
+#begin:active {
+  transform: scale(0.98);
+}
+
+.keys {
+  margin-top: 2rem;
+  font-size: 0.92rem;
+  line-height: 1.8;
+  color: var(--ink-dim);
+}
+
+.keys b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+#crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.8);
+}
+
+#perf-hud {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  padding: 8px 10px;
+  font: 12px/1.5 ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  white-space: pre;
+  color: #e9f0e4;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 4px;
+}
+
+#region-banner {
+  position: absolute;
+  left: 50%;
+  top: 14%;
+  transform: translateX(-50%);
+  font-size: 2rem;
+  letter-spacing: 0.16em;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.75);
+  opacity: 0;
+  transition: opacity 1.2s ease;
+  white-space: nowrap;
+}
+
+#region-banner.show {
+  opacity: 1;
+}

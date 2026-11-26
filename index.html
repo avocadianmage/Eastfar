@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Eastfar — a first-person fantasy journey into the east." />
+    <title>Eastfar</title>
+    <link rel="stylesheet" href="/src/ui/style.css" />
+  </head>
+  <body>
+    <canvas id="game" tabindex="0"></canvas>
+    <div id="ui">
+      <div id="overlay">
+        <div class="panel">
+          <h1>Eastfar</h1>
+          <p class="tagline">The road runs east. So, long ago, did Aleric.</p>
+          <p id="status">Waking the world…</p>
+          <button id="begin" hidden>Begin</button>
+          <p class="keys">
+            <b>WASD</b> move · <b>Mouse</b> look · <b>Shift</b> sprint · <b>Space</b> jump<br />
+            <b>E</b> interact · <b>Click</b> attack · <b>Tab</b> inventory · <b>Esc</b> pause
+          </p>
+        </div>
+      </div>
+      <div id="crosshair" hidden></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
