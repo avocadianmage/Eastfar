@@ -665,6 +665,13 @@ body {
   gap: 0.8rem;
 }
 
+#settings input[type='checkbox'] {
+  justify-self: start;
+  width: 1.05rem;
+  height: 1.05rem;
+  accent-color: var(--accent);
+}
+
 #settings select,
 #settings input[type='range'] {
   width: 100%;

@@ -115,6 +115,7 @@ export class Game {
     this.settings = loadSettings();
     this.quality = QUALITY[params.quality ?? this.settings.quality];
     this.audio.volume = this.settings.volume;
+    this.audio.musicOn = this.settings.music;
     this.input = new Input(canvas);
     this.hud = new PerfHud(ui);
     if (params.hud) this.hud.toggle(true);
@@ -319,6 +320,7 @@ export class Game {
         creekPan: pan,
         leafiness: Math.min(1, mask2At(t, feet.x, feet.z, MASK2_FOREST) * 0.8 + maskAt(t, feet.x, feet.z, MASK_GRASS) * 0.5),
         active: this.playing,
+        indoors: buildingAt(feet.x, feet.z) !== null,
       });
     }
 
@@ -344,6 +346,7 @@ export class Game {
   applySettings(change: Partial<Settings>): void {
     Object.assign(this.settings, change);
     this.audio.volume = this.settings.volume;
+    this.audio.musicOn = this.settings.music;
     this.player.sensitivity = this.settings.sensitivity;
     saveSettings(this.settings);
   }

@@ -9,7 +9,7 @@
 | 2 | The Quiet Village | Built: roads, bridge, eight enterable buildings, six villagers with day/night routines, dialogue, quests, pack and journal, resting, saving. One quest (The Old Legend) is playable start to finish; the others are offered as their content arrives in milestones 3 and 4 |
 | 3 | Meadow content | Built: combat with a first-person arm and weapons, five bee swarms, Moonlight Caps that glow at night, butterflies, fainting, and trading with the blacksmith and innkeeper. The elder's, beekeeper's and herbalist's quests are playable start to finish |
 | 4 | The Farms | Built: eight crop fields (wheat and rows of greens), two farmhouses and three barns (all enterable), ten scarecrows of which five walk at night, twelve crows, the farmers Dorrin and Marta Haywell, and the chained gate in a boundary wall at the forest's edge. Both farm quests are playable |
-| 5 | Polish and ship | Not started |
+| 5 | Polish and ship | Partly done: settings (graphics, volume, mouse speed, music), first-minute hints, a lantern that lights the dark, soft generative music, credits. Still open: a pass on sound once someone has listened to it, balancing from real play, songbirds and fish, and any performance work the first real-GPU measurements call for |
 
 Decisions made while building milestones 0 and 1:
 

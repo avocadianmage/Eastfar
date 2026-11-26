@@ -19,6 +19,8 @@ export interface AmbienceState {
   leafiness: number;
   /** True while the game is being played (not paused). */
   active: boolean;
+  /** True when the player is inside a building: the outdoors is muffled. */
+  indoors: boolean;
 }
 
 function noiseBuffer(ctx: AudioContext, seconds: number, pink: boolean): AudioBuffer {
@@ -80,6 +82,9 @@ export class Ambience {
   private buzzGain!: GainNode;
   private buzzPan!: StereoPannerNode;
   private birdTimer = 2;
+  private musicTimer = 6;
+  /** Quiet, slow notes now and then. */
+  musicOn = true;
   private owlTimer = 20;
   private white!: AudioBuffer;
   muted = false;
@@ -216,9 +221,11 @@ export class Ambience {
     if (!s.active) return;
 
     const night = 1 - s.dayFactor;
-    set(this.windGain.gain, 0.05 + s.wind * 0.22, 0.6);
-    set(this.windFilter.frequency, 260 + s.wind * 620, 0.6);
-    set(this.leafGain.gain, s.wind * s.wind * (0.012 + 0.05 * s.leafiness), 0.5);
+    // Walls take the edge off the weather.
+    const out = s.indoors ? 0.3 : 1;
+    set(this.windGain.gain, (0.05 + s.wind * 0.22) * out, 0.6);
+    set(this.windFilter.frequency, (260 + s.wind * 620) * (s.indoors ? 0.55 : 1), 0.6);
+    set(this.leafGain.gain, s.wind * s.wind * (0.012 + 0.05 * s.leafiness) * (s.indoors ? 0.15 : 1), 0.5);
 
     const near = Math.max(0, 1 - s.creekDistance / 42);
     set(this.creekGain.gain, near * near * 0.5, 0.3);
@@ -232,6 +239,13 @@ export class Ambience {
       this.birdTimer = 1.2 + Math.random() * (4 + 10 * night);
       if (s.dayFactor > 0.35) this.birdPhrase(s.dayFactor);
     }
+    // Music: single soft notes from a modal scale, far apart, lower and sparser at night.
+    this.musicTimer -= dt;
+    if (this.musicTimer <= 0) {
+      this.musicTimer = 6 + Math.random() * (8 + 10 * night);
+      if (this.musicOn) this.musicNote(night);
+    }
+
     this.owlTimer -= dt;
     if (this.owlTimer <= 0) {
       this.owlTimer = 18 + Math.random() * 40;
@@ -267,6 +281,39 @@ export class Ambience {
       o.start(t);
       o.stop(t + len + 0.02);
       t += len + 0.03 + Math.random() * 0.08;
+    }
+  }
+
+  /** One long, soft note (sometimes two, a fifth apart) in D dorian. */
+  private musicNote(night: number): void {
+    const ctx = this.ctx!;
+    const scale = [146.83, 164.81, 174.61, 196.0, 220.0, 261.63, 293.66, 329.63, 349.23, 440.0];
+    const pick = Math.floor(Math.random() * (night > 0.5 ? 6 : scale.length));
+    const notes = [scale[pick]!];
+    if (Math.random() < 0.4) notes.push(scale[pick]! * 1.5);
+    const t = ctx.currentTime + 0.05;
+    const len = 7 + Math.random() * 4;
+    for (const f of notes) {
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.028, t + 2.2);
+      g.gain.setTargetAtTime(0, t + 3, len / 4);
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 900;
+      const pan = ctx.createStereoPanner();
+      pan.pan.value = Math.random() * 0.8 - 0.4;
+      lp.connect(g).connect(pan).connect(this.master);
+      // Two slightly detuned voices so the note shimmers rather than drones.
+      for (const detune of [-4, 5]) {
+        const o = ctx.createOscillator();
+        o.type = 'triangle';
+        o.frequency.value = f;
+        o.detune.value = detune;
+        o.connect(lp);
+        o.start(t);
+        o.stop(t + len + 2);
+      }
     }
   }
 

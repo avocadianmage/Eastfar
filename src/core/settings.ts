@@ -7,9 +7,11 @@ export interface Settings {
   volume: number;
   /** Mouse look speed multiplier, 0.3..2.5. */
   sensitivity: number;
+  /** Quiet background music. */
+  music: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { quality: 'high', volume: 0.7, sensitivity: 1 };
+export const DEFAULT_SETTINGS: Settings = { quality: 'high', volume: 0.7, sensitivity: 1, music: true };
 
 const KEY = 'eastfar.settings';
 const QUALITIES: QualityName[] = ['low', 'medium', 'high', 'ultra'];
@@ -22,6 +24,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     quality: QUALITIES.includes(r.quality as QualityName) ? (r.quality as QualityName) : DEFAULT_SETTINGS.quality,
     volume: num(r.volume, 0, 1, DEFAULT_SETTINGS.volume),
     sensitivity: num(r.sensitivity, 0.3, 2.5, DEFAULT_SETTINGS.sensitivity),
+    music: typeof r.music === 'boolean' ? r.music : DEFAULT_SETTINGS.music,
   };
 }
 

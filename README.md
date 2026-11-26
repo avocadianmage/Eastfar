@@ -2,7 +2,12 @@
 
 A first-person, moody fantasy adventure played in the browser. The road runs east; so, long ago, did Aleric.
 
-The world is one continuous place with no loading zones: the Quiet Village, Aleric's Meadow to the north, and the Farms to the east, with stranger country beyond.
+The world is one continuous place with no loading zones: the Quiet Village, Aleric's Meadow to the north, and the Farms to the east, with stranger country beyond a chained gate.
+
+- **A living landscape:** wind-blown grass and wildflowers, a flowing creek, forested hills, a six-hour day and night with dawn mist and moonlit nights, butterflies and fireflies.
+- **A village to walk into:** thirteen buildings, every one enterable; villagers who go home at night; hearths, candles and glowing windows.
+- **Things to do:** five quests, bee swarms, crows, scarecrows that walk after dark, glowing mushrooms to gather, weapons and gear, a shop, and beds to rest in.
+- **No install, no account:** it runs in the browser and saves on your own machine.
 
 ## Play
 
@@ -16,8 +21,10 @@ Open the published link (GitHub Pages), click **Begin**, and walk.
 | Space | Jump |
 | E | Interact |
 | Click | Attack |
-| Tab | Inventory |
-| Esc | Pause (releases the mouse) |
+| Tab | Pack and journal |
+| Esc | Pause and settings (releases the mouse) |
+| M | Mute |
+| 1–4 | Choose a reply in conversation |
 | ` or F3 | Performance readout |
 
 ## Develop
@@ -57,7 +64,8 @@ Append to the URL, e.g. `?time=22:30&pos=40,-330&yaw=45&hud&freeze`.
 | `scale=0.5..1` | Fixed render scale |
 | `hud` | Show the performance readout |
 | `fly` | Free-fly camera (R/Q up/down, Shift fast) |
-| `skip=a,b` | Leave parts out to measure their cost (`terrain`, `sky`, `fog`, `shadows`, `grass`, ...) |
+| `skip=a,b` | Leave parts out to measure their cost (`terrain`, `sky`, `fog`, `shadows`, `grass`, `flowers`, `trees`, `rocks`, `water`, `village`, `npcs`, `bees`, `crows`, `scarecrows`, `fireflies`, `butterflies`, `bloom`, ...) |
+| `alt=metres` | With `fly`: start this high above the ground |
 | `autostart`, `nosave`, `offscreen` | For automated tests and screenshots |
 
 ### Screenshots
@@ -69,3 +77,7 @@ npm run build && node tools/shots.mjs noon="time=12:00&pos=40,-330&yaw=45" night
 Add `--webgpu` to capture through the WebGPU renderer instead of WebGL2.
 
 See [docs/DESIGN.md](docs/DESIGN.md) for the design and milestone plan.
+
+## Credits
+
+Eastfar is built with [three.js](https://threejs.org) (MIT) and the [Rapier](https://rapier.rs) physics engine (Apache-2.0). All terrain, plants, buildings, characters and sound are generated in code; there are no third-party art or audio assets.

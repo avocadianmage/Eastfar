@@ -110,6 +110,9 @@ async function boot(): Promise<void> {
   });
   volume.addEventListener('input', () => game.applySettings({ volume: Number(volume.value) }));
   sensitivity.addEventListener('input', () => game.applySettings({ sensitivity: Number(sensitivity.value) }));
+  const music = document.getElementById('set-music') as HTMLInputElement;
+  music.checked = game.settings.music;
+  music.addEventListener('change', () => game.applySettings({ music: music.checked }));
   (document.getElementById('set-reload') as HTMLButtonElement).addEventListener('click', () => {
     game.gameplay.saveNow();
     location.reload();
