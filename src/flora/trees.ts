@@ -60,6 +60,8 @@ const STAGGER = 5;
 const SHADOW_REACH = 30;
 /** Trees a little outside the view are kept as well, so a quick turn of the head finds them already there. (Tangent of the angle.) */
 const TURN_MARGIN = Math.tan(0.32);
+/** How much of the sky's colour shaded bark gives back, on top of the scene's own ambient light. */
+const WOOD_SKY_FILL = 0.45;
 /** Trees are re-sorted only after the player has moved a little; this much slack (metres) covers the lag. */
 const SORT_SLACK = 2.5;
 
@@ -317,7 +319,8 @@ function limb(a: THREE.Vector3, b: THREE.Vector3, r0: number, r1: number, sides:
     for (let k = 0; k < sides; k++) {
       const p0 = i * sides + k;
       const p1 = i * sides + ((k + 1) % sides);
-      idx.push(p0, p0 + sides, p1, p1, p0 + sides, p1 + sides);
+      // Wound so the outside of the tube faces out: the near wall is the one drawn.
+      idx.push(p0, p1, p0 + sides, p1, p1 + sides, p0 + sides);
     }
   }
   const g = new THREE.BufferGeometry();
@@ -443,7 +446,7 @@ function leafSprigs(blobs: [number, number, number, number][], outer = 34, inner
       U.normalize();
       V.copy(face).cross(U);
       const size = (deep ? 1.3 + rnd() * 0.6 : 1.25 + rnd() * 0.7) * (0.78 + br * 0.1) * sizeMul;
-      // Tiles of the leaf sheet: mostly full clusters, some open sprigs.
+      // Tiles of the leaf sheet (see leafTexture for which painting each number is): mostly tile 0.
       quad(px, py, pz, size, rnd() < 0.6 ? 0 : 1 + Math.floor(rnd() * 3));
       if (!deep && crossed) {
         // A second sprig at right angles through the same spot, so the outside of the crown
@@ -571,6 +574,9 @@ function leafTexture(): THREE.CanvasTexture {
       leaf(tile / 2 + Math.cos(a) * d, tile / 2 + Math.sin(a) * d, 60 + rnd() * 30, 15 + rnd() * 8, a + (rnd() - 0.5), 0.55 + 0.45 * t);
     }
   });
+  // Uploaded with its rows flipped (the default), so on the GPU the bottom row of this canvas comes
+  // first: tile 0 of the leaf geometry is the painting at the bottom left, tile 2 the one at the top left.
+  // The trees' look was tuned this way; do not unflip it without re-tuning how full the crowns are.
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.NoColorSpace;
   tex.generateMipmaps = true;
@@ -859,6 +865,8 @@ export class Trees {
       const viewDir = normalize(world.sub(env.viewPos));
       const through = pow(max(dot(viewDir, env.lightDir), 0), 2.5).mul(0.32).mul(leafy);
       let glow = colour.mul(env.lightColor).mul(through).add(colour.mul(lanternLight(world)));
+      // Bark under its own crown is lit only by the sky: enough of that to read as wood, not as a silhouette.
+      glow = glow.add(colour.mul(env.ambientSky).mul(float(1).sub(leafy)).mul(WOOD_SKY_FILL));
       if (cards === 'fixed') {
         // A sprig seen edge-on is a smear of texture, so it fades out as it turns away from the eye.
         const f = attribute('aFace', 'vec3');
