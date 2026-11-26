@@ -469,6 +469,8 @@ export class Game {
         return best < 0 ? null : { x: s.x[best]!, y: s.y[best]!, z: s.z[best]!, kind: s.kind[best]!, scale: s.scale[best]!, dist: bd };
       },
       treeCounts: () => this.trees?.counts() ?? [0, 0, 0],
+      /** What each kind of flower's head and stem read from the painted sheet (see Flowers.sheetReport). */
+      flowerSheet: () => this.flowers?.sheetReport() ?? [],
       /** Act on whatever the player is looking at; returns the prompt shown, or null. */
       interact: () => this.gameplay.interact(),
       dialogue: () => this.gameplay.dialogueText(),

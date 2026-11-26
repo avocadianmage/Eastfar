@@ -433,6 +433,8 @@ function flowerSheet(): THREE.CanvasTexture {
   });
 
   const tex = new THREE.CanvasTexture(canvas);
+  // The cards' texture coordinates count rows from the top of the sheet, as it is painted.
+  tex.flipY = false;
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.generateMipmaps = true;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
@@ -464,9 +466,11 @@ export class Flowers {
   /** Two rings of flowers round the player: every plant underfoot, every other one out to the middle distance. */
   readonly meshes: THREE.Mesh[] = [];
   private readonly fwd = new THREE.Vector3();
+  private readonly sheet: THREE.CanvasTexture;
 
   constructor(scene: THREE.Scene, t: TerrainData, tex: WorldTextures, quality: Quality) {
     const sheet = flowerSheet();
+    this.sheet = sheet;
     const cell = CELL / Math.sqrt(quality.flowerDensity);
     this.meshes.push(this.ring(scene, t, tex, sheet, 'flowers', false, cell));
     this.meshes.push(this.ring(scene, t, tex, sheet, 'flowers-near', true, cell));
@@ -583,8 +587,8 @@ export class Flowers {
 
       const right = cameraWorldMatrix.mul(vec4(1, 0, 0, 0)).xyz;
       const up = cameraWorldMatrix.mul(vec4(0, 1, 0, 0)).xyz;
-      // The stem card is a third as wide as it is tall: slim enough that one plant's leaves stay clear of the next plant's.
-      const stemOff = right.mul(positionGeometry.x.mul(height).mul(0.17));
+      // The stem card is as wide as its painting: half as wide as it is tall.
+      const stemOff = right.mul(positionGeometry.x.mul(height).mul(0.25));
       // Heads look up at the sky as well as at the viewer: each is tipped back by its own amount,
       // so a drift shows flowers at every angle rather than a wall of discs.
       const away = normalize(vec3(xz.x.sub(env.viewPos.x), 0, xz.y.sub(env.viewPos.z)));
@@ -624,6 +628,38 @@ export class Flowers {
     mesh.name = name;
     scene.add(mesh);
     return mesh;
+  }
+
+  /**
+   * For tests: what each kind's head card and stem card read from the sheet, worked out the way
+   * the cards' texture coordinates and the texture's row order work it out on the GPU. Gives the
+   * average colour (0..255) of the painted part of each, and how much of the card is painted.
+   */
+  sheetReport(): { name: string; head: number[]; headCover: number; stem: number[]; stemCover: number }[] {
+    const canvas = this.sheet.image as HTMLCanvasElement;
+    const g = canvas.getContext('2d')!;
+    const H = canvas.height;
+    const W = canvas.width;
+    /** Rows of the canvas a card reads when its texture v runs from v0 to v1. */
+    const rows = (v0: number, v1: number): [number, number] => (this.sheet.flipY ? [(1 - v1) * H, (1 - v0) * H] : [v0 * H, v1 * H]);
+    const average = (x0: number, x1: number, v0: number, v1: number): { colour: number[]; cover: number } => {
+      const [y0, y1] = rows(v0, v1);
+      const data = g.getImageData(Math.round(x0 * W), Math.round(y0), Math.round((x1 - x0) * W), Math.round(y1 - y0)).data;
+      const sum = [0, 0, 0];
+      let painted = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3]! < 128) continue;
+        painted++;
+        for (let c = 0; c < 3; c++) sum[c]! += data[i + c]!;
+      }
+      return { colour: sum.map((v) => Math.round(v / Math.max(1, painted))), cover: painted / (data.length / 4) };
+    };
+    return KINDS.map((k) => {
+      // The same sums as in the vertex stage: heads are a tile each in the top half, stems two tiles tall in the bottom half.
+      const head = average(k.tile[0] / 4, (k.tile[0] + 1) / 4, k.tile[1] / 4, (k.tile[1] + 1) / 4);
+      const stem = average(k.stem / 4, (k.stem + 1) / 4, 0.5, 1);
+      return { name: k.name, head: head.colour, headCover: head.cover, stem: stem.colour, stemCover: stem.cover };
+    });
   }
 
   update(camera: THREE.Camera): void {
