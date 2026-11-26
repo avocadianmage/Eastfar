@@ -43,9 +43,29 @@ import type { Quality } from '../render/quality';
 import { terrainUv } from '../render/terrain';
 import type { WorldTextures } from '../render/textures';
 
+/** Flowers are drawn out to this distance (metres). */
 const REACH = 62;
 /** The thick ring of flowers close to the player. */
 const NEAR_REACH = 24;
+/**
+ * Every plant stands in its own cell of one grid over the whole world, this wide (metres, at full
+ * density). Close by every cell is drawn; further off, every other one (a checkerboard of the
+ * same cells), so the two rings can never put two plants in one spot.
+ */
+const CELL = 0.34;
+/** A plant sits within this much of the middle of its cell (a fraction of the cell), which keeps neighbours apart. */
+const JITTER = 0.56;
+/** How far the grid is pushed about (metres, either way at most) to hide its rows. */
+const BEND = 1.6;
+/** Where the far ring takes over the plants it keeps from the near ring (metres). */
+const HAND_OVER = NEAR_REACH * 0.95;
+/** The plants the far ring does not keep thin out between these distances, each at a distance of its own. */
+const THIN_FROM = NEAR_REACH * 0.45;
+const THIN_TO = NEAR_REACH * 0.92;
+/** A kind of flower grows in patches about this wide (metres). */
+const PATCH = 3.4;
+/** One plant in this many is a stray of any kind among its neighbours. */
+const STRAYS = 0.08;
 
 /**
  * The kinds of flower. `tile` is where its head is on the sheet (column, row),
@@ -441,23 +461,30 @@ function flowerGeometry(instances: number): THREE.InstancedBufferGeometry {
 const flowerCentre = uniform(new THREE.Vector2());
 
 export class Flowers {
-  /** Two rings of flowers round the player: thick underfoot, thinner out to the middle distance. */
+  /** Two rings of flowers round the player: every plant underfoot, every other one out to the middle distance. */
   readonly meshes: THREE.Mesh[] = [];
   private readonly fwd = new THREE.Vector3();
 
   constructor(scene: THREE.Scene, t: TerrainData, tex: WorldTextures, quality: Quality) {
     const sheet = flowerSheet();
-    const far = 0.5 / Math.sqrt(quality.flowerDensity);
-    this.meshes.push(this.ring(scene, t, tex, sheet, 'flowers', REACH, far, 977));
-    // Close by, three more plants for each of those: a meadow you wade through.
-    this.meshes.push(this.ring(scene, t, tex, sheet, 'flowers-near', NEAR_REACH, far * 0.55, 4421));
+    const cell = CELL / Math.sqrt(quality.flowerDensity);
+    this.meshes.push(this.ring(scene, t, tex, sheet, 'flowers', false, cell));
+    this.meshes.push(this.ring(scene, t, tex, sheet, 'flowers-near', true, cell));
   }
 
-  /** One wrapping grid of flowers out to `reach` metres, one plant to a cell at most. */
-  private ring(scene: THREE.Scene, t: TerrainData, tex: WorldTextures, sheet: THREE.Texture, name: string, reach: number, cellSize: number, salt: number): THREE.Mesh {
-    const half = reach * 0.8;
-    const side = Math.ceil((half * 2) / cellSize);
+  /**
+   * One wrapping grid of flowers that follows the player. Both rings read the same world-wide
+   * grid of cells, so a plant is the same plant (place, kind, size, sway) whichever ring draws it:
+   * the near ring draws every cell out to its edge, the far ring every other cell from there on.
+   */
+  private ring(scene: THREE.Scene, t: TerrainData, tex: WorldTextures, sheet: THREE.Texture, name: string, near: boolean, cellSize: number): THREE.Mesh {
+    const reach = near ? NEAR_REACH : REACH;
+    const half = reach * (near ? 0.9 : 0.8);
     const shift = reach * 0.35;
+    // The far ring's columns are two cells apart, and each row starts one cell along from the last.
+    const columnWidth = near ? cellSize : cellSize * 2;
+    const columns = Math.ceil((half * 2) / columnWidth);
+    const rows = Math.ceil((half * 2) / cellSize);
 
     const mat = new THREE.MeshLambertNodeMaterial();
     mat.side = THREE.DoubleSide;
@@ -474,27 +501,36 @@ export class Flowers {
     let run = 0;
     const edges = KINDS.map((k) => (run += k.share / total));
 
-    const n = float(side);
+    const size = vec2(columns, rows);
+    const step2 = vec2(columnWidth, cellSize);
     const cell = float(cellSize);
 
     mat.positionNode = Fn(() => {
       const id = instanceIndex.toFloat();
-      const gz = floor(id.div(n));
-      const gx = id.sub(gz.mul(n));
+      const gz = floor(id.add(0.5).div(columns));
+      const gx = id.sub(gz.mul(columns));
       const centre = env.viewPos.xz.add(flowerCentre.mul(shift));
-      const base = floor(centre.div(cell));
-      const halfN = n.mul(0.5);
-      const rel = mod(vec2(gx, gz).sub(base).add(halfN), n).sub(halfN);
-      const wc = base.add(rel).toVar();
+      const base = floor(centre.div(step2));
+      const halfSize = size.mul(0.5);
+      const g = base.add(mod(vec2(gx, gz).sub(base).add(halfSize), size).sub(halfSize)).toVar();
+      // Which cell of the world's grid this is.
+      const wc = (near ? g : vec2(g.x.mul(2).add(mod(g.y, 2)), g.y)).toVar();
+      // The far ring keeps the cells whose column and row add up to an even number.
+      const kept = step(mod(wc.x.add(wc.y), 2), 0.5);
 
-      const seed = uint(wc.x.add(32768)).add(uint(wc.y.add(32768)).mul(uint(65536))).add(uint(salt)).toVar();
+      const seed = uint(wc.x.add(32768)).add(uint(wc.y.add(32768)).mul(uint(65536))).add(uint(977)).toVar();
       const r1 = hash(seed);
       const r2 = hash(seed.add(uint(7919)));
       const r3 = hash(seed.add(uint(104729)));
       const r4 = hash(seed.add(uint(1299709)));
       const r5 = hash(seed.add(uint(15485863)));
+      const r6 = hash(seed.add(uint(32452843)));
 
-      const xz = wc.add(vec2(r1, r2)).mul(cell).toVar();
+      // Each plant keeps to the middle of its cell, and the whole grid is bent this way and that
+      // over a few metres so that no rows show. (A blurred level of the noise: only its broad shapes.)
+      const middle = wc.add(0.5).mul(cell);
+      const pushed = texture(tex.noise, middle.mul(1 / 10)).level(float(4)).ra.sub(0.5).mul(BEND);
+      const xz = middle.add(vec2(r1, r2).sub(0.5).mul(JITTER).mul(cell)).add(pushed).toVar();
       const tuv = terrainUv(t, xz);
       const ground = texture(tex.height, tuv).level(float(0)).r;
       const mask = texture(tex.mask, tuv).level(float(0));
@@ -504,11 +540,24 @@ export class Flowers {
       const drift = texture(tex.noise, xz.mul(1 / 21)).level(float(0)).g;
       const chance = mask.a.mul(smoothstep(0.3, 0.62, drift).mul(0.85).add(0.1));
       const dist = length(xz.sub(env.viewPos.xz));
-      const present = smoothstep(r3, r3.add(0.02), chance).mul(float(1).sub(smoothstep(reach * 0.7, reach * 0.97, dist)));
+      const grows = smoothstep(r3, r3.add(0.02), chance);
+      let inRange: THREE.Node<'float'>;
+      if (near) {
+        // Plants the far ring keeps are drawn here right up to the hand-over; the rest thin out before it.
+        const goes = mix(float(THIN_FROM), float(THIN_TO), r6);
+        const thinned = float(1).sub(smoothstep(goes.sub(2.5), goes, dist));
+        inRange = mix(thinned, step(dist, HAND_OVER), kept);
+      } else {
+        inRange = step(HAND_OVER, dist).mul(float(1).sub(smoothstep(reach * 0.7, reach * 0.97, dist)));
+      }
+      const present = grows.mul(inRange);
 
-      // Which kind: each drift favours the kind a slow noise picks, with a third of the plants chosen freely.
-      const kindNoise = texture(tex.noise, xz.mul(1 / 57).add(vec2(0.3, 0.8))).level(float(0)).r;
-      const pick = mix(smoothstep(0.22, 0.78, kindNoise.add(r2.sub(0.5).mul(0.12))), r5, step(0.67, r4));
+      // Which kind: flowers grow in patches of one kind, a few metres across with wavering edges,
+      // and now and then a stray of another kind stands among them.
+      const waver = texture(tex.noise, xz.mul(1 / 24)).level(float(3)).ra.sub(0.5).mul(6);
+      const patch = floor(xz.add(waver).div(PATCH));
+      const patchSeed = uint(patch.x.add(32768)).add(uint(patch.y.add(32768)).mul(uint(65536))).add(uint(9973));
+      const pick = mix(hash(patchSeed), r5, step(1 - STRAYS, r4));
       let kindIndex: THREE.Node<'float'> = float(0);
       for (let i = 0; i < edges.length - 1; i++) kindIndex = kindIndex.add(step(edges[i]!, pick));
       const kind = int(kindIndex).toVar();
@@ -534,8 +583,8 @@ export class Flowers {
 
       const right = cameraWorldMatrix.mul(vec4(1, 0, 0, 0)).xyz;
       const up = cameraWorldMatrix.mul(vec4(0, 1, 0, 0)).xyz;
-      // The stem card is as wide as its painting needs: half as wide as it is tall.
-      const stemOff = right.mul(positionGeometry.x.mul(height).mul(0.25));
+      // The stem card is a third as wide as it is tall: slim enough that one plant's leaves stay clear of the next plant's.
+      const stemOff = right.mul(positionGeometry.x.mul(height).mul(0.17));
       // Heads look up at the sky as well as at the viewer: each is tipped back by its own amount,
       // so a drift shows flowers at every angle rather than a wall of discs.
       const away = normalize(vec3(xz.x.sub(env.viewPos.x), 0, xz.y.sub(env.viewPos.z)));
@@ -568,7 +617,7 @@ export class Flowers {
     mat.alphaToCoverage = true;
     mat.normalNode = transformNormalToView(vNormal.normalize());
 
-    const mesh = new THREE.Mesh(flowerGeometry(side * side), mat);
+    const mesh = new THREE.Mesh(flowerGeometry(columns * rows), mat);
     mesh.frustumCulled = false;
     mesh.castShadow = false;
     mesh.receiveShadow = true;
