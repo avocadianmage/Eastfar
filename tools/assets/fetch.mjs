@@ -172,8 +172,6 @@ const exists = (p) => access(p).then(() => true, () => false);
  */
 const AUDIO_OUT = join(ROOT, '.cache', 'audio');
 const AUDIO_FILES = {
-  'birds-isaiah658_0.ogg': 'https://opengameart.org/sites/default/files/birds-isaiah658_0.ogg',
-  'park_ambience_birds.wav': 'https://opengameart.org/sites/default/files/park_ambience_birds.wav',
   'park_ambience_river.wav': 'https://opengameart.org/sites/default/files/park_ambience_river.wav',
   'crickets-oneloop.mp3': 'https://opengameart.org/sites/default/files/crickets-oneloop.mp3',
   'fire.wav': 'https://opengameart.org/sites/default/files/fire.wav',

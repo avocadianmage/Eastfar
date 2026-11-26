@@ -1,13 +1,5 @@
 {
  "beds": {
-  "birds": {
-   "loopStart": 0.25,
-   "loopEnd": 26.25
-  },
-  "chatter": {
-   "loopStart": 0.25,
-   "loopEnd": 38.25
-  },
   "creek": {
    "loopStart": 0.25,
    "loopEnd": 30.25

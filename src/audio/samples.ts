@@ -3,7 +3,7 @@
  * recordings): beds that loop without a seam, and one file of short sounds
  * with where each begins.
  */
-export type BedName = 'birds' | 'chatter' | 'creek' | 'crickets' | 'fire';
+export type BedName = 'creek' | 'crickets' | 'fire';
 
 export interface SoundBank {
   beds: Record<BedName, { buffer: AudioBuffer; loopStart: number; loopEnd: number }>;

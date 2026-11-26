@@ -61,7 +61,7 @@ describe('character assets', () => {
       beds: Record<string, { loopStart: number; loopEnd: number }>;
       sfx: Record<string, [number, number][]>;
     };
-    for (const bed of ['birds', 'chatter', 'creek', 'crickets', 'fire']) {
+    for (const bed of ['creek', 'crickets', 'fire']) {
       expect(index.beds[bed], bed).toBeDefined();
       expect(index.beds[bed]!.loopEnd - index.beds[bed]!.loopStart, bed).toBeGreaterThan(10);
       expect(statSync(join(DIR, 'audio', `${bed}.mp3`)).size, bed).toBeGreaterThan(50_000);

@@ -3,11 +3,11 @@
  * panned as you near it), birdsong by day, crickets and the odd owl at night,
  * a hearth's crackle indoors, and footsteps that change with the ground.
  *
- * Birds, creek, crickets, fire, footsteps and doors are recordings (see
- * samples.ts), fetched in the background once sound starts. Everything was
- * first synthesised in the browser, and still is until the recordings arrive
- * or if they are turned off (`recorded = false`); wind, bees, the owl, music
- * and the remaining effects are always synthesised.
+ * The creek, crickets, fire, footsteps and doors are recordings (see
+ * samples.ts), fetched in the background once sound starts. The creek and
+ * crickets are synthesised in the browser until the recordings arrive, or if
+ * they are turned off (`recorded = false`). Birdsong, wind, bees, the owl,
+ * music and the remaining effects are always synthesised.
  *
  * Browsers only allow sound after a user gesture, so `start()` is called from
  * the Begin button.
@@ -307,26 +307,23 @@ export class Ambience {
     set(this.creekPan.pan, s.creekPan * Math.min(1, s.creekDistance / 8) * 0.7, 0.2);
     const rec = this.bedGain;
     if (this.bank) {
-      // Recordings take over from the synthesised creek, crickets and birds.
+      // Recordings take over from the synthesised creek and crickets.
       set(this.creekGain.gain, 0, 0.8);
       set(this.cricketGain.gain, 0, 0.8);
       set(this.outdoors.frequency, s.indoors ? 1100 : 16000, 0.4);
       set(rec.get('creek')!.gain, near * near * 0.85 * out, 0.3);
       set(rec.get('crickets')!.gain, Math.max(0, night - 0.35) * 0.5 * out, 1.5);
-      // Birds sing through the day, loudest in the morning light and among trees, and fall quiet at dusk.
-      const song = Math.max(0, s.dayFactor - 0.3) / 0.7;
-      set(rec.get('birds')!.gain, song * (0.3 + 0.25 * s.leafiness) * out, 2.5);
-      set(rec.get('chatter')!.gain, song * 0.4 * out, 2.5);
       set(rec.get('fire')!.gain, s.hearth * s.hearth * 0.9, 0.4);
     } else {
       set(this.creekGain.gain, near * near * 0.5, 0.3);
       set(this.cricketGain.gain, Math.max(0, night - 0.35) * 0.07, 1.5);
-      // Birdsong: short phrases, more often in full daylight.
-      this.birdTimer -= dt;
-      if (this.birdTimer <= 0) {
-        this.birdTimer = 1.2 + Math.random() * (4 + 10 * night);
-        if (s.dayFactor > 0.35) this.birdPhrase(s.dayFactor);
-      }
+    }
+    // Birdsong is always synthesised: short, quiet phrases now and then, more often in full daylight.
+    // (Recorded birdsong was tried and was too loud, too constant and distracting.)
+    this.birdTimer -= dt;
+    if (this.birdTimer <= 0) {
+      this.birdTimer = 1.2 + Math.random() * (4 + 10 * night);
+      if (s.dayFactor > 0.35) this.birdPhrase(s.dayFactor);
     }
     // Music: single soft notes from a modal scale, far apart, lower and sparser at night.
     this.musicTimer -= dt;

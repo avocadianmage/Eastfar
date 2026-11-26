@@ -3,7 +3,7 @@
  * recordings in .cache/audio/ (see the list at the bottom of this file for
  * where each comes from):
  *
- *   birds.mp3, chatter.mp3, creek.mp3, crickets.mp3, fire.mp3   beds that loop without a seam
+ *   creek.mp3, crickets.mp3, fire.mp3   beds that loop without a seam
  *   sfx.mp3 + sounds.json                          footsteps and other short sounds in one file,
  *                                                  with where each starts, and the beds' loop points
  *
@@ -154,10 +154,6 @@ function clip(source, peak = 0.7) {
 
 mkdirSync(OUT, { recursive: true });
 const beds = {
-  // Clear, close song...
-  birds: bed('birds', 'birds-isaiah658_0.ogg', { length: 26, fade: 3, channels: 2, filter: 'highpass=f=1100', level: -25, kbps: 96 }),
-  // ...over the chatter of many birds further off. The park recording has a city's hum under it, so only its top is kept.
-  chatter: bed('chatter', 'park_ambience_birds.wav', { length: 38, fade: 4, channels: 1, filter: 'highpass=f=2200,highpass=f=2200,lowpass=f=11000', level: -30, kbps: 64 }),
   creek: bed('creek', 'park_ambience_river.wav', { length: 30, fade: 3, channels: 1, filter: 'highpass=f=140,lowpass=f=11000', level: -22, kbps: 72 }),
   crickets: bed('crickets', 'crickets-oneloop.mp3', { length: 18, fade: 2, channels: 2, filter: 'highpass=f=900', level: -27, kbps: 80 }),
   fire: bed('fire', 'fire.wav', { length: 22, fade: 3, channels: 1, filter: 'highpass=f=90', level: -24, kbps: 64 }),
@@ -200,8 +196,7 @@ writeFileSync(join(OUT, 'sounds.json'), JSON.stringify({ beds, sfx: marks }, nul
 
 /*
  * Sources (all CC0 1.0):
- *   birds-isaiah658_0.ogg                              "Ambient Bird Sounds" by FacadeGaikan, opengameart.org/content/ambient-bird-sounds
- *   park_ambience_birds.wav, park_ambience_river.wav   "Park ambiences" by Thimras, opengameart.org/content/park-ambiences
+ *   park_ambience_river.wav                            "Park ambiences" by Thimras, opengameart.org/content/park-ambiences
  *   crickets-oneloop.mp3                               "Crickets Ambient Noise - loopable" by 2DPIXX, opengameart.org/content/crickets-ambient-noise-loopable
  *   fire.wav                                           "Fireplace Sound loop" by StarNinjas, opengameart.org/content/fireplace-sound-loop
  *   kenney_impact-sounds, kenney_rpg-audio             "Impact Sounds" and "RPG Audio" by Kenney, kenney.nl/assets
