@@ -1,5 +1,25 @@
 # Eastfar — design and build plan
 
+## Status
+
+| # | Milestone | State |
+|---|---|---|
+| 0 | Foundation | Done |
+| 1 | A walk in the meadow | Built; awaiting sign-off on look and frame time on a real GPU |
+| 2 | The Quiet Village | Not started |
+| 3 | Meadow content | Not started |
+| 4 | The Farms | Not started |
+| 5 | Polish and ship | Not started |
+
+Decisions made while building milestones 0 and 1:
+
+- **Layout in metres** (+x east, -z north): village at (0, 0); Aleric's Meadow centred at (40, -330); the Farms centred at (520, 30); Aleric's statue at (-100, -435) inside a ring of trees with a gap to the south-east; the old gate at (852, 20).
+- **The creek** rises in the north-east hills (visible as a cascade), winds south-west through the meadow, then runs south past the village's east side. The East Road will cross it on a bridge at about (118, 4), so reaching the Farms means crossing the water.
+- **Sun and moon:** sunrise 06:00 due east (straight down the East Road), sunset 20:30; a full moon every night. A new game starts at 06:45.
+- **Rendering:** both WebGPU and WebGL2 paths are verified to produce the same image. Grass, flowers and fireflies are placed on the GPU on wrapping grids (no streaming); trees are sorted into three detail levels on the CPU (about 0.5 ms per frame worst case).
+- **Sound** is synthesised in the browser for now (wind, creek, birds, crickets, owl, footsteps); recorded CC0 audio can replace it in milestone 5.
+- **Measured against the budget** at "high": about 35 draw calls and 1.0–1.3 M triangles in the meadow.
+
 ## Context
 
 Eastfar is a new 3D first-person, moody fantasy adventure game played in the browser. The goal is a seamless, beautiful natural world (lush plants, running creeks, misty moonlit nights) that holds a 120 FPS frame budget and opens from a link with no install.

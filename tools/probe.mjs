@@ -22,10 +22,13 @@ const server = createServer(async (req, res) => {
   }
 });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
-const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const browser = await chromium.launch({
+  args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu', '--use-webgpu-adapter=swiftshader', '--disable-gpu-sandbox'],
+});
 const page = await browser.newPage({ viewport: { width: 320, height: 180 } });
 page.on('pageerror', (e) => console.log('[pageerror]', e.message));
-await page.goto(`http://127.0.0.1:${server.address().port}/?freeze=1&autostart=1&nosave=1&backend=webgl&quality=low&skip=grass&${process.argv[3] ?? ''}`);
+// Your query comes first so it wins over the defaults.
+await page.goto(`http://127.0.0.1:${server.address().port}/?${process.argv[3] ?? ''}&freeze=1&autostart=1&nosave=1&backend=webgl&quality=low&skip=grass`);
 await page.waitForFunction(() => window.__eastfar && (window.__eastfar.ready || window.__eastfar.error), null, { timeout: 120000 });
 console.log(JSON.stringify(await page.evaluate(process.argv[2])));
 await browser.close();

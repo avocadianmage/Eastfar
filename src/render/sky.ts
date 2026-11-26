@@ -181,6 +181,42 @@ export class Sky {
 
   /** Update every light and sky colour for the given time of day. */
   update(hour: number, eye: THREE.Vector3, groundY: number, dt: number): void {
+    // The sky changes very slowly (a full day takes six hours), so the palette is
+    // only recomputed every couple of game seconds; following the player is every frame.
+    if (Math.abs(hour - this.paletteHour) > 0.0006) {
+      this.paletteHour = hour;
+      this.applyPalette(hour);
+    }
+    const t = this.tod;
+
+    // Mist pools around the level of the ground the player stands on.
+    const targetBase = groundY - 0.5;
+    const k = dt > 0 ? 1 - Math.exp(-dt * 0.6) : 1;
+    env.mistBase.value += (targetBase - env.mistBase.value) * k;
+
+    this.lightDirSmoothed.set(t.lightDir[0], t.lightDir[1], t.lightDir[2]);
+    // Keep the light from going fully horizontal; shadows would stretch forever.
+    if (this.lightDirSmoothed.y < 0.09) {
+      this.lightDirSmoothed.y = 0.09;
+      this.lightDirSmoothed.normalize();
+    }
+
+    // Shadow box follows the player, snapped to whole shadow texels so edges do not crawl.
+    const texel = (this.shadowDistance * 2) / this.light.shadow.mapSize.x;
+    const cx = Math.round(eye.x / texel) * texel;
+    const cz = Math.round(eye.z / texel) * texel;
+    const cy = Math.round(groundY / texel) * texel;
+    this.light.target.position.set(cx, cy, cz);
+    this.tmp.copy(this.lightDirSmoothed).multiplyScalar(200);
+    this.light.position.set(cx + this.tmp.x, cy + this.tmp.y, cz + this.tmp.z);
+    this.light.target.updateMatrixWorld();
+
+    this.dome.position.copy(eye);
+  }
+
+  private paletteHour = -1;
+
+  private applyPalette(hour: number): void {
     const t = timeOfDay(hour);
     this.tod = t;
 
@@ -201,11 +237,6 @@ export class Sky {
     env.dayFactor.value = t.dayFactor;
     env.starVisibility.value = t.starVisibility;
 
-    // Mist pools around the level of the ground the player stands on.
-    const targetBase = groundY - 0.5;
-    const k = dt > 0 ? 1 - Math.exp(-dt * 0.6) : 1;
-    env.mistBase.value += (targetBase - env.mistBase.value) * k;
-
     // Sun disc stays bright even when its light on the land is weak at sunset.
     const sunUp = THREE.MathUtils.smoothstep(t.sunElevation, -3, 1.5);
     const sc = t.sunColor;
@@ -225,23 +256,5 @@ export class Sky {
     } else {
       this.light.intensity = 0;
     }
-    this.lightDirSmoothed.set(t.lightDir[0], t.lightDir[1], t.lightDir[2]);
-    // Keep the light from going fully horizontal; shadows would stretch forever.
-    if (this.lightDirSmoothed.y < 0.09) {
-      this.lightDirSmoothed.y = 0.09;
-      this.lightDirSmoothed.normalize();
-    }
-
-    // Shadow box follows the player, snapped to whole shadow texels so edges do not crawl.
-    const texel = (this.shadowDistance * 2) / this.light.shadow.mapSize.x;
-    const cx = Math.round(eye.x / texel) * texel;
-    const cz = Math.round(eye.z / texel) * texel;
-    const cy = Math.round(groundY / texel) * texel;
-    this.light.target.position.set(cx, cy, cz);
-    this.tmp.copy(this.lightDirSmoothed).multiplyScalar(200);
-    this.light.position.set(cx + this.tmp.x, cy + this.tmp.y, cz + this.tmp.z);
-    this.light.target.updateMatrixWorld();
-
-    this.dome.position.copy(eye);
   }
 }

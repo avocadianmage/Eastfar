@@ -8,6 +8,7 @@ Browser game: 3D first-person fantasy adventure. Three.js (`three/webgpu` + TSL 
 - `npm test` — unit tests (Vitest, `tests/unit`)
 - `npm run test:e2e` — Playwright tests against a production build (`tests/e2e`)
 - `npm run build` — type-check and build to `dist/`
+- `node tools/probe.mjs "js expression" "query"` — evaluate JavaScript inside the running game (debug hooks are on `window.__eastfar`)
 - `node tools/shots.mjs name="time=12:00&pos=x,z&yaw=deg" [--webgpu] [--size=1280x720]` — deterministic screenshots into `shots/` (run `npm run build` first)
 
 ## Conventions
@@ -22,7 +23,7 @@ Browser game: 3D first-person fantasy adventure. Three.js (`three/webgpu` + TSL 
 
 ## Verifying visuals
 
-This sandbox has no GPU. WebGL2 runs through SwiftShader and page screenshots work. WebGPU works only off-screen (presenting to a canvas kills the device), so `tools/shots.mjs --webgpu` adds `offscreen=1` and reads pixels back from a render target. Check both backends after shader changes. Real frame rate can only be measured on the user's machine (` key shows the perf HUD).
+This sandbox has no GPU. WebGL2 runs through SwiftShader and page screenshots work. WebGPU works only off-screen (presenting to a canvas kills the device), so `tools/shots.mjs --webgpu` adds `offscreen=1` and reads pixels back from a render target. Check both backends after shader changes; the WebGPU path is also several times faster for screenshots here. Real frame rate can only be measured on the user's machine (` key shows the perf HUD).
 
 ## Git
 

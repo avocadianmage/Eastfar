@@ -64,9 +64,11 @@ export class Physics {
 
   /** Place the player's feet at a position without collision checks. */
   teleportFeet(x: number, y: number, z: number): void {
-    const p = { x, y: y + PLAYER_HEIGHT / 2 + 0.03, z };
-    this.playerBody.setTranslation(p, true);
-    this.playerBody.setNextKinematicTranslation(p);
+    this.next.x = x;
+    this.next.y = y + PLAYER_HEIGHT / 2 + 0.03;
+    this.next.z = z;
+    this.playerBody.setTranslation(this.next, true);
+    this.playerBody.setNextKinematicTranslation(this.next);
     this.world.step();
   }
 
@@ -81,10 +83,10 @@ export class Physics {
     this.desired.z = dz;
     this.controller.computeColliderMovement(this.playerCollider, this.desired);
     const mv = this.controller.computedMovement();
-    const cur = this.playerBody.translation();
-    this.next.x = cur.x + mv.x;
-    this.next.y = cur.y + mv.y;
-    this.next.z = cur.z + mv.z;
+    // `next` always holds the player's current centre, so no need to ask the body for it.
+    this.next.x += mv.x;
+    this.next.y += mv.y;
+    this.next.z += mv.z;
     this.playerBody.setNextKinematicTranslation(this.next);
     outFeet.x = this.next.x;
     outFeet.y = this.next.y - PLAYER_HEIGHT / 2;
