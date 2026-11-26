@@ -33,6 +33,12 @@ try {
   await page.waitForFunction(() => window.__eastfar.state().frames >= 5, null, { timeout: 120000 });
   const state = await page.evaluate(() => window.__eastfar.state());
   const elder = await page.evaluate(() => window.__eastfar.npc('elder'));
+  // Start sound as the Begin button would, and wait for the recordings to arrive.
+  if (await page.evaluate(() => typeof window.__eastfar.sound === 'function')) {
+    await page.evaluate(() => window.__eastfar.sound());
+    await page.waitForFunction(() => window.__eastfar.sound().recordings, null, { timeout: 60000 });
+    console.log('recorded sounds loaded');
+  }
   console.log(`up: ${state.backend}, ${state.drawCalls} draws, ${Math.round(state.triangles / 1000)}k triangles, region ${state.region}`);
   console.log(`elder: ${JSON.stringify(elder)}`);
   ok = true;

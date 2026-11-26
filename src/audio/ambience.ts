@@ -1,11 +1,22 @@
 /**
- * The soundscape, synthesised in the browser with no audio files: wind that
- * rises with the gusts, the creek's babble (louder and panned as you near
- * it), birdsong by day, crickets and the odd owl at night, and footsteps.
+ * The soundscape: wind that rises with the gusts, the creek (louder and
+ * panned as you near it), birdsong by day, crickets and the odd owl at night,
+ * a hearth's crackle indoors, and footsteps that change with the ground.
+ *
+ * Birds, creek, crickets, fire, footsteps and doors are recordings (see
+ * samples.ts), fetched in the background once sound starts. Everything was
+ * first synthesised in the browser, and still is until the recordings arrive
+ * or if they are turned off (`recorded = false`); wind, bees, the owl, music
+ * and the remaining effects are always synthesised.
  *
  * Browsers only allow sound after a user gesture, so `start()` is called from
  * the Begin button.
  */
+import { loadSounds, type BedName, type SoundBank } from './samples';
+
+/** What is underfoot. */
+export type Surface = 'grass' | 'dirt' | 'stone' | 'wood' | 'water';
+
 export interface AmbienceState {
   /** 1 by day, 0 at night. */
   dayFactor: number;
@@ -21,6 +32,8 @@ export interface AmbienceState {
   active: boolean;
   /** True when the player is inside a building: the outdoors is muffled. */
   indoors: boolean;
+  /** 0..1: how close a burning hearth is. */
+  hearth: number;
 }
 
 function noiseBuffer(ctx: AudioContext, seconds: number, pink: boolean): AudioBuffer {
@@ -89,9 +102,22 @@ export class Ambience {
   private white!: AudioBuffer;
   muted = false;
   volume = 0.7;
+  /** Use recordings where there are any. Set before `start()`. */
+  recorded = true;
+  /** Where the recordings are served from, with a trailing slash. */
+  soundsUrl = 'assets/audio/';
+  private bank: SoundBank | null = null;
+  /** Recorded beds from outdoors pass through this, which dulls them indoors. */
+  private outdoors!: BiquadFilterNode;
+  private readonly bedGain = new Map<BedName, GainNode>();
 
   get started(): boolean {
     return this.ctx !== null;
+  }
+
+  /** True once the recordings have arrived and taken over from the synthesised sounds. */
+  get usingRecordings(): boolean {
+    return this.bank !== null;
   }
 
   /** Create the audio graph. Must be called from a click or key press. */
@@ -208,6 +234,56 @@ export class Ambience {
       g.gain.value = 0.3;
       loop(cricketBuffer(ctx, pitch, tempo)).connect(g).connect(p).connect(this.cricketGain);
     }
+
+    this.outdoors = ctx.createBiquadFilter();
+    this.outdoors.type = 'lowpass';
+    this.outdoors.frequency.value = 16000;
+    this.outdoors.connect(this.master);
+    if (this.recorded) {
+      loadSounds(ctx, this.soundsUrl)
+        .then((bank) => this.useRecordings(bank))
+        .catch(() => {
+          // No recordings: the synthesised sounds carry on.
+        });
+    }
+  }
+
+  /** Start the recorded beds, silent until `update` raises them. */
+  private useRecordings(bank: SoundBank): void {
+    const ctx = this.ctx!;
+    for (const name of Object.keys(bank.beds) as BedName[]) {
+      const bed = bank.beds[name];
+      const src = ctx.createBufferSource();
+      src.buffer = bed.buffer;
+      src.loop = true;
+      src.loopStart = bed.loopStart;
+      src.loopEnd = bed.loopEnd;
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      // The creek is panned toward where it lies; the fire is in the room with you; the rest is out of doors.
+      if (name === 'creek') src.connect(gain).connect(this.creekPan);
+      else if (name === 'fire') src.connect(gain).connect(this.master);
+      else src.connect(gain).connect(this.outdoors);
+      src.start(0, bed.loopStart + Math.random() * (bed.loopEnd - bed.loopStart));
+      this.bedGain.set(name, gain);
+    }
+    this.bank = bank;
+  }
+
+  /** Play one of the variants of a short recorded sound. Returns false if there is none. */
+  private play(kind: string, gain: number, rate = 1): boolean {
+    const ctx = this.ctx;
+    const marks = this.bank?.marks[kind];
+    if (!ctx || !this.bank || !marks || marks.length === 0) return false;
+    const [start, length] = marks[Math.floor(Math.random() * marks.length)]!;
+    const src = ctx.createBufferSource();
+    src.buffer = this.bank.sfx;
+    src.playbackRate.value = rate;
+    const g = ctx.createGain();
+    g.gain.value = gain;
+    src.connect(g).connect(this.master);
+    src.start(ctx.currentTime, start, length);
+    return true;
   }
 
   /** Call every frame. */
@@ -228,16 +304,29 @@ export class Ambience {
     set(this.leafGain.gain, s.wind * s.wind * (0.012 + 0.05 * s.leafiness) * (s.indoors ? 0.15 : 1), 0.5);
 
     const near = Math.max(0, 1 - s.creekDistance / 42);
-    set(this.creekGain.gain, near * near * 0.5, 0.3);
     set(this.creekPan.pan, s.creekPan * Math.min(1, s.creekDistance / 8) * 0.7, 0.2);
-
-    set(this.cricketGain.gain, Math.max(0, night - 0.35) * 0.07, 1.5);
-
-    // Birdsong: short phrases, more often in full daylight.
-    this.birdTimer -= dt;
-    if (this.birdTimer <= 0) {
-      this.birdTimer = 1.2 + Math.random() * (4 + 10 * night);
-      if (s.dayFactor > 0.35) this.birdPhrase(s.dayFactor);
+    const rec = this.bedGain;
+    if (this.bank) {
+      // Recordings take over from the synthesised creek, crickets and birds.
+      set(this.creekGain.gain, 0, 0.8);
+      set(this.cricketGain.gain, 0, 0.8);
+      set(this.outdoors.frequency, s.indoors ? 1100 : 16000, 0.4);
+      set(rec.get('creek')!.gain, near * near * 0.85 * out, 0.3);
+      set(rec.get('crickets')!.gain, Math.max(0, night - 0.35) * 0.5 * out, 1.5);
+      // Birds sing through the day, loudest in the morning light and among trees, and fall quiet at dusk.
+      const song = Math.max(0, s.dayFactor - 0.3) / 0.7;
+      set(rec.get('birds')!.gain, song * (0.3 + 0.25 * s.leafiness) * out, 2.5);
+      set(rec.get('chatter')!.gain, song * 0.4 * out, 2.5);
+      set(rec.get('fire')!.gain, s.hearth * s.hearth * 0.9, 0.4);
+    } else {
+      set(this.creekGain.gain, near * near * 0.5, 0.3);
+      set(this.cricketGain.gain, Math.max(0, night - 0.35) * 0.07, 1.5);
+      // Birdsong: short phrases, more often in full daylight.
+      this.birdTimer -= dt;
+      if (this.birdTimer <= 0) {
+        this.birdTimer = 1.2 + Math.random() * (4 + 10 * night);
+        if (s.dayFactor > 0.35) this.birdPhrase(s.dayFactor);
+      }
     }
     // Music: single soft notes from a modal scale, far apart, lower and sparser at night.
     this.musicTimer -= dt;
@@ -342,6 +431,23 @@ export class Ambience {
   }
 
   /** A burst of filtered noise: swish through grass, splash in water, thud on landing. */
+  /**
+   * A footfall.
+   * @param surface what is underfoot
+   * @param strength 0..1: a stroll to a sprint
+   * @param landing true when coming down from a jump or a drop
+   */
+  footfall(surface: Surface, strength: number, landing = false): void {
+    if (!this.ctx || this.muted) return;
+    if (surface !== 'water' && this.play(surface, (landing ? 0.5 : 0.2) + 0.25 * strength, 0.92 + Math.random() * 0.16)) {
+      // Landing adds a thud under the step.
+      if (landing) this.step('land', strength);
+      return;
+    }
+    this.step(landing ? 'land' : surface === 'water' ? 'water' : 'grass', strength);
+  }
+
+  /** A synthesised footstep: the fallback, and the splash and the thud of a landing. */
   step(kind: 'grass' | 'water' | 'land', strength: number): void {
     const ctx = this.ctx;
     if (!ctx || this.muted) return;
@@ -385,9 +491,15 @@ export class Ambience {
   }
 
   /** Short one-off sounds. */
-  sfx(kind: 'swing' | 'hit' | 'hurt' | 'pick' | 'coin' | 'caw' | 'creak'): void {
+  sfx(kind: 'swing' | 'hit' | 'hurt' | 'pick' | 'coin' | 'caw' | 'creak' | 'doorOpen' | 'doorClose'): void {
     const ctx = this.ctx;
     if (!ctx || this.muted) return;
+    // Recorded where there is a recording; otherwise synthesised below.
+    if (kind === 'doorOpen' || kind === 'doorClose') {
+      if (this.play(kind, 0.5, 0.95 + Math.random() * 0.1)) return;
+      kind = 'creak';
+    }
+    if (kind === 'hit' && this.play('thump', 0.6, 0.9 + Math.random() * 0.25)) return;
     const t = ctx.currentTime;
     const tone = (type: OscillatorType, f0: number, f1: number, len: number, peak: number, delay = 0) => {
       const o = ctx.createOscillator();

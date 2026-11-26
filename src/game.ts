@@ -2,8 +2,8 @@
  * The game: builds the world, then runs the frame loop.
  */
 import * as THREE from 'three/webgpu';
-import { loadArmAssets, loadCharacterAssets, loadPropAssets, type CharacterAssets } from './assets/loader';
-import { Ambience } from './audio/ambience';
+import { assetUrl, loadArmAssets, loadCharacterAssets, loadPropAssets, type CharacterAssets } from './assets/loader';
+import { Ambience, type Surface } from './audio/ambience';
 import { Props } from './buildings/props';
 import { Village } from './buildings/village';
 import { GameClock } from './core/clock';
@@ -41,10 +41,10 @@ import { Sky } from './render/sky';
 import { TerrainMesh } from './render/terrain';
 import { createWorldTextures, type WorldTextures } from './render/textures';
 import { CreekWater } from './water/creek';
-import { REGION_LABELS, regionAt, type RegionName } from './world/layout';
+import { COBBLED_WITHIN, REGION_LABELS, VILLAGE, regionAt, type RegionName } from './world/layout';
 import { Physics } from './world/physics';
 import { buildingAt } from './world/buildings';
-import { MASK2_FOREST, MASK_GRASS, bakeTerrain, creekDistanceAt, heightAt, mask2At, maskAt, type TerrainData } from './world/terrainData';
+import { MASK2_FOREST, MASK2_PATH, MASK_GRASS, bakeTerrain, creekDistanceAt, heightAt, mask2At, maskAt, type TerrainData } from './world/terrainData';
 
 export interface GameState {
   x: number;
@@ -123,10 +123,21 @@ export class Game {
     this.settings = loadSettings();
     this.quality = QUALITY[params.quality ?? this.settings.quality];
     this.audio.volume = this.settings.volume;
+    this.audio.recorded = params.audio !== 'synth';
+    this.audio.soundsUrl = assetUrl('audio/');
     this.audio.musicOn = this.settings.music;
     this.input = new Input(canvas);
     this.hud = new PerfHud(ui);
     if (params.hud) this.hud.toggle(true);
+  }
+
+  /** What the player is walking on, for the sound of their steps. */
+  private surfaceUnderfoot(): Surface {
+    const f = this.player.feet;
+    if (this.player.wading > 0.06) return 'water';
+    if (buildingAt(f.x, f.z)) return 'wood';
+    if (mask2At(this.terrain, f.x, f.z, MASK2_PATH) > 0.45) return Math.hypot(f.x - VILLAGE.x, f.z - VILLAGE.z) < COBBLED_WITHIN - 6 ? 'stone' : 'dirt';
+    return 'grass';
   }
 
   async init(onStatus: (msg: string) => void): Promise<void> {
@@ -174,8 +185,8 @@ export class Game {
     this.player = new Player(this.physics, this.terrain);
     this.player.fly = this.params.fly;
     this.player.sensitivity = this.settings.sensitivity;
-    this.player.onFootstep = (strength) => this.audio.step(this.player.wading > 0.06 ? 'water' : 'grass', strength);
-    this.player.onLand = (impact) => this.audio.step(this.player.wading > 0.06 ? 'water' : 'land', impact);
+    this.player.onFootstep = (strength) => this.audio.footfall(this.surfaceUnderfoot(), strength);
+    this.player.onLand = (impact) => this.audio.footfall(this.surfaceUnderfoot(), impact, true);
 
     const content: string[] = [];
     if (this.village) {
@@ -358,6 +369,7 @@ export class Game {
         leafiness: Math.min(1, mask2At(t, feet.x, feet.z, MASK2_FOREST) * 0.8 + maskAt(t, feet.x, feet.z, MASK_GRASS) * 0.5),
         active: this.playing,
         indoors: buildingAt(feet.x, feet.z) !== null,
+        hearth: this.village?.fireNearness(feet) ?? 0,
       });
     }
 
@@ -474,6 +486,11 @@ export class Game {
       hurt: (amount: number) => this.gameplay.hurt(amount),
       scarecrows: () => (this.scarecrows?.all ?? []).map((s) => ({ id: s.def.id, x: s.feet.x, z: s.feet.z, state: s.state, health: s.health, walks: s.def.walks, clip: s.figure.clip })),
       crows: () => (this.crows?.all ?? []).map((c) => ({ x: c.position.x, y: c.position.y, z: c.position.z, state: c.state })),
+      /** Start sound (as the Begin button does) and report on it. */
+      sound: () => {
+        this.audio.start();
+        return { started: this.audio.started, recordings: this.audio.usingRecordings, surface: this.surfaceUnderfoot() };
+      },
       /** Hold the arm at a point of its swing, 0..1 (null to let go): for screenshots. */
       swingAt: (t: number | null) => {
         if (this.viewmodel) this.viewmodel.forcedSwing = t;

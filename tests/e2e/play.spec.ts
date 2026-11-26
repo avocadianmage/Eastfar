@@ -145,6 +145,26 @@ test('villagers are animated and gesture while they talk', async ({ page }) => {
   expect(far.triangles).toBeLessThan(before.triangles / 2);
 });
 
+test('recorded sounds load, and footsteps know what is underfoot', async ({ page }) => {
+  await boot(page, 'time=10:00');
+  type Sound = { started: boolean; recordings: boolean; surface: string };
+  expect((await api<Sound>(page, 'return api.sound();')).started).toBe(true);
+  await page.waitForFunction(() => (window as unknown as { __eastfar: { sound(): { recordings: boolean } } }).__eastfar.sound().recordings, null, { timeout: 60_000 });
+  // On the cobbled square, on the grass beside it, on the earth road out of the village, and indoors.
+  await api(page, 'api.teleport(2, 3, 0, 0);');
+  await frames(page, 2);
+  expect((await api<Sound>(page, 'return api.sound();')).surface).toBe('stone');
+  await api(page, 'api.teleport(-20, 12, 0, 0);');
+  await frames(page, 2);
+  expect((await api<Sound>(page, 'return api.sound();')).surface).toBe('grass');
+  await api(page, 'api.teleport(100, 3.3, 90, 0);');
+  await frames(page, 2);
+  expect((await api<Sound>(page, 'return api.sound();')).surface).toBe('dirt');
+  await api(page, 'api.teleport(16, 25, 0, 0);');
+  await frames(page, 2);
+  expect((await api<Sound>(page, 'return api.sound();')).surface).toBe('wood');
+});
+
 test('villagers go indoors at night', async ({ page }) => {
   await boot(page, 'time=12:00');
   const day = await api<{ x: number; z: number; night: boolean }>(page, 'return api.npc("elder");');

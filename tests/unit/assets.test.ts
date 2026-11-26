@@ -56,6 +56,21 @@ describe('character assets', () => {
     for (const name of allPropModels()) expect(built.has(name), name).toBe(true);
   });
 
+  it('has every recorded sound the game plays, with loop points inside each bed', () => {
+    const index = JSON.parse(readFileSync(join(DIR, 'audio', 'sounds.json'), 'utf8')) as {
+      beds: Record<string, { loopStart: number; loopEnd: number }>;
+      sfx: Record<string, [number, number][]>;
+    };
+    for (const bed of ['birds', 'chatter', 'creek', 'crickets', 'fire']) {
+      expect(index.beds[bed], bed).toBeDefined();
+      expect(index.beds[bed]!.loopEnd - index.beds[bed]!.loopStart, bed).toBeGreaterThan(10);
+      expect(statSync(join(DIR, 'audio', `${bed}.mp3`)).size, bed).toBeGreaterThan(50_000);
+    }
+    for (const kind of ['grass', 'dirt', 'stone', 'wood', 'thump', 'doorOpen', 'doorClose']) {
+      expect(index.sfx[kind]?.length ?? 0, kind).toBeGreaterThan(0);
+    }
+  });
+
   it('keeps the download small', () => {
     let total = 0;
     const walk = (dir: string): void => {

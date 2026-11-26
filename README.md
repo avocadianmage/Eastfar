@@ -66,6 +66,7 @@ Append to the URL, e.g. `?time=22:30&pos=40,-330&yaw=45&hud&freeze`.
 | `fly` | Free-fly camera (R/Q up/down, Shift fast) |
 | `skip=a,b` | Leave parts out to measure their cost (`terrain`, `sky`, `fog`, `shadows`, `grass`, `flowers`, `trees`, `rocks`, `water`, `village`, `npcs`, `bees`, `crows`, `scarecrows`, `fireflies`, `butterflies`, `bloom`, ...) |
 | `alt=metres` | With `fly`: start this high above the ground |
+| `audio=synth` | Use the synthesised sounds only, not the recordings (to compare) |
 | `autostart`, `nosave`, `offscreen` | For automated tests and screenshots |
 
 ### Assets
@@ -84,7 +85,7 @@ npm run assets:build
 npm run assets:preview -- elder="model=elder&clip=Idle_Loop&t=1&views=full:0,face:30"
 ```
 
-`assets:build` runs both `tools/assets/build.mjs` (characters and animation) and `tools/assets/build-props.mjs` (furniture and props). `assets:fetch` pulls only the needed files from the packs' free tiers into `.cache/packs/`. `tools/assets/recipes.mjs` says which pieces, colours and animation clips make each character. `assets:preview` writes screenshots of a built character to `shots/assets/`.
+`assets:build` runs `tools/assets/build.mjs` (characters and animation), `tools/assets/build-props.mjs` (furniture and props) and `tools/assets/build-audio.mjs` (recorded sound; needs ffmpeg). `assets:fetch` pulls only the needed files from the packs' free tiers into `.cache/packs/`. `tools/assets/recipes.mjs` says which pieces, colours and animation clips make each character. `assets:preview` writes screenshots of a built character to `shots/assets/`.
 
 ### Screenshots
 
@@ -100,4 +101,4 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the design and milestone plan.
 
 Eastfar is built with [three.js](https://threejs.org) (MIT) and the [Rapier](https://rapier.rs) physics engine (Apache-2.0).
 
-The people of the village and their animations come from [Quaternius](https://quaternius.com)'s public-domain (CC0) packs: Universal Base Characters, Modular Character Outfits – Fantasy, and Universal Animation Library 1 and 2. Furniture and props are from the same author's Fantasy Props MegaKit. Every file and its source is listed in [public/assets/CREDITS.md](public/assets/CREDITS.md). The terrain, plants, buildings and sound are generated in code.
+The people of the village and their animations come from [Quaternius](https://quaternius.com)'s public-domain (CC0) packs: Universal Base Characters, Modular Character Outfits – Fantasy, and Universal Animation Library 1 and 2. Furniture and props are from the same author's Fantasy Props MegaKit. Birdsong, the creek, crickets, the hearth, footsteps and doors are public-domain recordings from OpenGameArt contributors (FacadeGaikan, Thimras, 2DPIXX, StarNinjas) and [Kenney](https://kenney.nl). Every file and its source is listed in [public/assets/CREDITS.md](public/assets/CREDITS.md). The terrain, plants, buildings, wind and music are generated in code.

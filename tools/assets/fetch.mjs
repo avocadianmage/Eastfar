@@ -5,7 +5,10 @@
  * Only the files matched below are downloaded: the zips are read over HTTP
  * range requests, so a 300 MB pack costs a few megabytes.
  *
+ * It also fetches the CC0 recordings the audio build uses, into .cache/audio/.
+ *
  *   node tools/assets/fetch.mjs            fetch anything missing
+ *   node tools/assets/fetch.mjs audio      fetch only the named sets (base, outfits, anims1, anims2, props, audio)
  *   node tools/assets/fetch.mjs --list     print every file in each pack
  *   node tools/assets/fetch.mjs --force    fetch again even if present
  *
@@ -162,6 +165,90 @@ async function readEntry(url, e) {
 
 const exists = (p) => access(p).then(() => true, () => false);
 
+/**
+ * Recordings for tools/assets/build-audio.mjs, all CC0: single files from
+ * OpenGameArt, and two packs from kenney.nl (fetched through the site's own
+ * "continue without donating" link, then unpacked in memory).
+ */
+const AUDIO_OUT = join(ROOT, '.cache', 'audio');
+const AUDIO_FILES = {
+  'birds-isaiah658_0.ogg': 'https://opengameart.org/sites/default/files/birds-isaiah658_0.ogg',
+  'park_ambience_birds.wav': 'https://opengameart.org/sites/default/files/park_ambience_birds.wav',
+  'park_ambience_river.wav': 'https://opengameart.org/sites/default/files/park_ambience_river.wav',
+  'crickets-oneloop.mp3': 'https://opengameart.org/sites/default/files/crickets-oneloop.mp3',
+  'fire.wav': 'https://opengameart.org/sites/default/files/fire.wav',
+};
+const KENNEY_PACKS = { 'kenney_impact-sounds': 'assets/impact-sounds', 'kenney_rpg-audio': 'assets/rpg-audio' };
+
+/** Every file of a zip held in memory, as [name, bytes]. */
+function unzip(buf) {
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= 0; i--) {
+    if (buf.readUInt32LE(i) === 0x06054b50) {
+      eocd = i;
+      break;
+    }
+  }
+  if (eocd < 0) throw new Error('not a zip');
+  const out = [];
+  let p = buf.readUInt32LE(eocd + 16);
+  const end = p + buf.readUInt32LE(eocd + 12);
+  while (p + 46 <= end && buf.readUInt32LE(p) === 0x02014b50) {
+    const method = buf.readUInt16LE(p + 10);
+    const compSize = buf.readUInt32LE(p + 20);
+    const nameLen = buf.readUInt16LE(p + 28);
+    const offset = buf.readUInt32LE(p + 42);
+    const name = buf.subarray(p + 46, p + 46 + nameLen).toString('utf8');
+    p += 46 + nameLen + buf.readUInt16LE(p + 30) + buf.readUInt16LE(p + 32);
+    if (name.endsWith('/') || name.includes('..')) continue;
+    const start = offset + 30 + buf.readUInt16LE(offset + 26) + buf.readUInt16LE(offset + 28);
+    const data = buf.subarray(start, start + compSize);
+    out.push([name, method === 0 ? data : inflateRawSync(data)]);
+  }
+  return out;
+}
+
+async function fetchAudio(force) {
+  let failed = false;
+  const download = async (url, headers = {}) => {
+    const res = await fetch(url, { headers: { 'User-Agent': UA, ...headers } });
+    if (!res.ok) throw new Error(`${res.status} for ${url}`);
+    return Buffer.from(await res.arrayBuffer());
+  };
+  await mkdir(AUDIO_OUT, { recursive: true });
+  for (const [name, url] of Object.entries(AUDIO_FILES)) {
+    const dest = join(AUDIO_OUT, name);
+    if (!force && (await exists(dest))) continue;
+    try {
+      const data = await download(url);
+      await writeFile(dest, data);
+      console.log(`audio: ${name} (${(data.length / 1e6).toFixed(1)} MB)`);
+    } catch (err) {
+      failed = true;
+      console.error(`audio: ${name} FAILED (${err.message}); download it by hand from ${url}`);
+    }
+  }
+  for (const [folder, path] of Object.entries(KENNEY_PACKS)) {
+    const dest = join(AUDIO_OUT, folder);
+    if (!force && (await exists(join(dest, 'License.txt')))) continue;
+    const page = `https://kenney.nl/${path}`;
+    try {
+      const link = JSON.parse((await download(`https://kenney.nl/download-link/${Buffer.from(path).toString('hex')}`, { Referer: page })).toString());
+      if (!link.url) throw new Error('no download link offered');
+      const files = unzip(await download(link.url));
+      for (const [name, data] of files) {
+        await mkdir(dirname(join(dest, name)), { recursive: true });
+        await writeFile(join(dest, name), data);
+      }
+      console.log(`audio: ${folder} (${files.length} files)`);
+    } catch (err) {
+      failed = true;
+      console.error(`audio: ${folder} FAILED (${err.message}); download the pack by hand from ${page} and unzip it into .cache/audio/${folder}/`);
+    }
+  }
+  return failed;
+}
+
 async function main() {
   const list = process.argv.includes('--list');
   const force = process.argv.includes('--force');
@@ -198,6 +285,7 @@ async function main() {
       console.error(`${id}: FAILED (${err.message}).\n  Download the free Standard zip by hand from ${pack.page}\n  and unzip it into .cache/packs/${id}/`);
     }
   }
+  if (!list && (only.length === 0 || only.includes('audio'))) failed = (await fetchAudio(force)) || failed;
   if (failed) process.exitCode = 1;
 }
 

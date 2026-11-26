@@ -381,6 +381,16 @@ export class Village {
     }
   }
 
+  /** How near a burning hearth is to a point: 1 beside it, 0 beyond earshot. */
+  fireNearness(p: THREE.Vector3): number {
+    let best = 0;
+    for (const l of this.lamps) {
+      if (l.kind !== 'fire') continue;
+      best = Math.max(best, 1 - l.pos.distanceTo(p) / 9);
+    }
+    return Math.max(0, best);
+  }
+
   /** Number of lamps (for tests). */
   get lampCount(): number {
     return this.lamps.length;

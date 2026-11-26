@@ -565,6 +565,7 @@ export class Gameplay {
   }
 
   private useDoor(door: Door): void {
+    this.d.audio.sfx(door.open ? 'doorClose' : 'doorOpen');
     this.d.village?.toggleDoor(door);
   }
 

@@ -38,6 +38,8 @@ export interface DebugParams {
   offscreen: boolean;
   /** Tone mapping curve to try: aces, agx, neutral or none. */
   tone?: string;
+  /** `synth`: use the synthesised sounds only, not the recordings. */
+  audio?: string;
   /** Parts of the world to leave out, for diagnosing cost: e.g. `skip=grass,shadows`. */
   skip: Set<string>;
 }
@@ -91,6 +93,7 @@ export function parseParams(search: string): DebugParams {
     autostart: flag('autostart'),
     offscreen: flag('offscreen'),
     tone: q.get('tone') ?? undefined,
+    audio: q.get('audio') ?? undefined,
     skip: new Set((q.get('skip') ?? '').split(',').filter(Boolean)),
   };
 }

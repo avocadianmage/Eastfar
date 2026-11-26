@@ -23,7 +23,7 @@ Browser game: 3D first-person fantasy adventure. Three.js (`three/webgpu` + TSL 
 - Performance budget: 8.3 ms/frame at "high", ≤ 250 draw calls, ≤ 1.5 M triangles, no per-frame allocations in hot paths. Prefer GPU instancing and shader-side placement over per-object meshes.
 - Every building must be enterable with no loading zones.
 - UI is plain DOM/CSS in `src/ui`, layered over the canvas.
-- People are skinned models on one shared 65-bone skeleton (`src/entities/character.ts`), built from CC0 packs by `tools/assets/build.mjs`: one colour atlas for everyone, tints baked into vertex colours, three levels of detail, animations retargeted per body. Only CC0/public-domain assets, each listed in `public/assets/CREDITS.md`. Built outputs are committed; source packs are not.
+- People are skinned models on one shared 65-bone skeleton (`src/entities/character.ts`), built from CC0 packs by `tools/assets/build.mjs`: one colour atlas for everyone, tints baked into vertex colours, three levels of detail, animations retargeted per body. Furniture and props are merged per building (`src/buildings/props.ts`, placed by `src/world/dressing.ts`). Recorded sounds (`src/audio/samples.ts`) replace the synthesised ones once loaded; `?audio=synth` keeps the synthesised ones. Only CC0/public-domain assets, each listed in `public/assets/CREDITS.md`. Built outputs are committed; source packs are not.
 
 ## Verifying visuals
 
