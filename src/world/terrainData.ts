@@ -13,6 +13,14 @@ export const MASK_GRASS = 0;
 export const MASK_DIRT = 1;
 export const MASK_WET = 2;
 export const MASK_FLOWERS = 3;
+/**
+ * The creek's water spreads a little past the width its channel was cut to, so plants are kept
+ * out of it by how wet the ground is (MASK_WET, read between samples as the GPU reads it): about
+ * 0.6 at the waterline. No grass grows where it is wetter than the first of these and no flowers
+ * where it is wetter than the second, which keeps flowers a step back from the water's edge.
+ */
+export const WET_NO_GRASS = 0.6;
+export const WET_NO_FLOWERS = 0.42;
 /** Channels of the second mask texture. */
 export const MASK2_FOREST = 0;
 export const MASK2_CONIFER = 1;

@@ -24,6 +24,7 @@ import {
   pow,
   sin,
   smoothstep,
+  step,
   texture,
   transformNormalToView,
   uint,
@@ -34,7 +35,7 @@ import {
 } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import { ROW_SPACING } from '../world/fields';
-import type { TerrainData } from '../world/terrainData';
+import { WET_NO_GRASS, type TerrainData } from '../world/terrainData';
 import { env, lanternLight } from '../render/env';
 import type { Quality } from '../render/quality';
 import { col, grassColorNode, terrainUv } from '../render/terrain';
@@ -158,7 +159,9 @@ export class Grass {
       const dist = length(xz.sub(env.viewPos.xz));
       const present = smoothstep(0.02, 0.1, growth)
         .mul(smoothstep(r5.mul(0.5), r5.mul(0.5).add(0.12), growth.mul(1.5)))
-        .mul(mix(float(1), inRow, greens));
+        .mul(mix(float(1), inRow, greens))
+        // None under the creek's water.
+        .mul(step(mask.b, WET_NO_GRASS));
       const fadeOut = float(1).sub(smoothstep(ring.outer * 0.72, ring.outer * 0.98, dist));
       const fadeIn = ring.inner > 0 ? smoothstep(ring.inner * 0.72, ring.inner * 1.05, dist) : float(1);
       const scale = present.mul(fadeOut).mul(fadeIn);

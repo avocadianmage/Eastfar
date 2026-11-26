@@ -12,6 +12,7 @@ import {
   cameraWorldMatrix,
   float,
   floor,
+  fract,
   hash,
   instanceIndex,
   int,
@@ -21,6 +22,7 @@ import {
   normalize,
   positionGeometry,
   positionWorld,
+  screenCoordinate,
   sin,
   smoothstep,
   step,
@@ -37,31 +39,38 @@ import {
 } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import { mulberry32 } from '../core/rng';
-import type { TerrainData } from '../world/terrainData';
+import { WET_NO_FLOWERS, type TerrainData } from '../world/terrainData';
 import { env, lanternLight } from '../render/env';
 import type { Quality } from '../render/quality';
 import { terrainUv } from '../render/terrain';
 import type { WorldTextures } from '../render/textures';
 
 /** Flowers are drawn out to this distance (metres). */
-const REACH = 62;
-/** The thick ring of flowers close to the player. */
+const REACH = 85;
+/** Within this distance a plant is drawn whole, with its stem and leaves; beyond it, only its flower head. */
 const NEAR_REACH = 24;
 /**
  * Every plant stands in its own cell of one grid over the whole world, this wide (metres, at full
- * density). Close by every cell is drawn; further off, every other one (a checkerboard of the
- * same cells), so the two rings can never put two plants in one spot.
+ * density), and every plant in sight is drawn: none is held back to appear as the player nears.
+ * Two rings read that grid, the near one drawing whole plants and the far one only their heads,
+ * so the two can never put two plants in one spot.
  */
 const CELL = 0.34;
 /** A plant sits within this much of the middle of its cell (a fraction of the cell), which keeps neighbours apart. */
 const JITTER = 0.56;
 /** How far the grid is pushed about (metres, either way at most) to hide its rows. */
 const BEND = 1.6;
-/** Where the far ring takes over the plants it keeps from the near ring (metres). */
+/** Where the far ring takes over from the near ring (metres). A head is the same head in both, so nothing shows. */
 const HAND_OVER = NEAR_REACH * 0.95;
-/** The plants the far ring does not keep thin out between these distances, each at a distance of its own. */
-const THIN_FROM = NEAR_REACH * 0.45;
-const THIN_TO = NEAR_REACH * 0.92;
+/** Stems are too thin to see from far off: they dissolve away over this many metres short of the hand-over. */
+const STEMS_GO_OVER = 8;
+/**
+ * At the edge of sight nothing grows out of the ground: a plant dissolves in at full size, over
+ * EDGE_BAND metres, at a distance of its own between these fractions of the reach.
+ */
+const EDGE_FROM = 0.72;
+const EDGE_TO = 0.98;
+const EDGE_BAND = 7;
 /** A kind of flower grows in patches about this wide (metres). */
 const PATCH = 3.4;
 /** One plant in this many is a stray of any kind among its neighbours. */
@@ -443,18 +452,22 @@ function flowerSheet(): THREE.CanvasTexture {
   return tex;
 }
 
-/** One flower: a tall narrow card for the stem and its leaves, then a square for the head. y = 0 at the root, 1 at the top. */
-function flowerGeometry(instances: number): THREE.InstancedBufferGeometry {
+/**
+ * One flower. Whole: a tall narrow card for the stem and its leaves, then a square for the head
+ * (y = 0 at the root, 1 at the top). Head alone, for far off: a single triangle that covers the
+ * head's square, the corners past the square's edge being thrown away when it is drawn.
+ */
+function flowerGeometry(instances: number, whole: boolean): THREE.InstancedBufferGeometry {
   // position.x/z = sideways offsets in units of the part's half-size, position.y = height along the stem.
-  const pos = [-1, 0, 0, 1, 0, 0, 1, 1, 0, -1, 1, 0, /* head */ -1, 1, -1, 1, 1, -1, 1, 1, 1, -1, 1, 1];
-  const part = [0, 0, 0, 0, 1, 1, 1, 1];
   // Texture v runs down the sheet, so a stem's root (v = 1) is at the bottom of its painting.
-  const uvs = [0, 1, 1, 1, 1, 0, 0, 0, /* head */ 0, 1, 1, 1, 1, 0, 0, 0];
+  const pos = whole ? [-1, 0, 0, 1, 0, 0, 1, 1, 0, -1, 1, 0, /* head */ -1, 1, -1, 1, 1, -1, 1, 1, 1, -1, 1, 1] : [-1, 1, -1, 3, 1, -1, -1, 1, 3];
+  const part = whole ? [0, 0, 0, 0, 1, 1, 1, 1] : [1, 1, 1];
+  const uvs = whole ? [0, 1, 1, 1, 1, 0, 0, 0, /* head */ 0, 1, 1, 1, 1, 0, 0, 0] : [0, 1, 2, 1, 0, -1];
   const g = new THREE.InstancedBufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('aPart', new THREE.Float32BufferAttribute(part, 1));
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  g.setIndex([0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7]);
+  g.setIndex(whole ? [0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7] : [0, 1, 2]);
   g.instanceCount = instances;
   g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6);
   return g;
@@ -463,7 +476,7 @@ function flowerGeometry(instances: number): THREE.InstancedBufferGeometry {
 const flowerCentre = uniform(new THREE.Vector2());
 
 export class Flowers {
-  /** Two rings of flowers round the player: every plant underfoot, every other one out to the middle distance. */
+  /** Two rings of flowers round the player: whole plants close by, their heads alone from there to the edge of sight. */
   readonly meshes: THREE.Mesh[] = [];
   private readonly fwd = new THREE.Vector3();
   private readonly sheet: THREE.CanvasTexture;
@@ -478,23 +491,23 @@ export class Flowers {
 
   /**
    * One wrapping grid of flowers that follows the player. Both rings read the same world-wide
-   * grid of cells, so a plant is the same plant (place, kind, size, sway) whichever ring draws it:
-   * the near ring draws every cell out to its edge, the far ring every other cell from there on.
+   * grid of cells, so a plant is the same plant (place, kind, size, sway) whichever ring draws it.
    */
   private ring(scene: THREE.Scene, t: TerrainData, tex: WorldTextures, sheet: THREE.Texture, name: string, near: boolean, cellSize: number): THREE.Mesh {
     const reach = near ? NEAR_REACH : REACH;
-    const half = reach * (near ? 0.9 : 0.8);
+    const half = reach * (near ? 0.9 : 0.86);
     const shift = reach * 0.35;
-    // The far ring's columns are two cells apart, and each row starts one cell along from the last.
-    const columnWidth = near ? cellSize : cellSize * 2;
-    const columns = Math.ceil((half * 2) / columnWidth);
-    const rows = Math.ceil((half * 2) / cellSize);
+    const columns = Math.ceil((half * 2) / cellSize);
+    const rows = columns;
 
     const mat = new THREE.MeshLambertNodeMaterial();
     mat.side = THREE.DoubleSide;
     const vTint = varyingProperty('vec3', 'vFlowerTint');
     const vSheet = varyingProperty('vec2', 'vFlowerSheet');
     const vNormal = varyingProperty('vec3', 'vFlowerNormal');
+    // How far the card has dissolved into view (1 = wholly here), and where on its own square each corner is.
+    const vFade = varyingProperty('float', 'vFlowerFade');
+    const vSquare = varyingProperty('vec2', 'vFlowerSquare');
     // Per-kind numbers, looked up by kind in the shader.
     const kindTile = uniformArray(KINDS.map((k) => new THREE.Vector2(k.tile[0], k.tile[1])), 'vec2');
     const kindStem = uniformArray(KINDS.map((k) => k.stem), 'float');
@@ -506,7 +519,6 @@ export class Flowers {
     const edges = KINDS.map((k) => (run += k.share / total));
 
     const size = vec2(columns, rows);
-    const step2 = vec2(columnWidth, cellSize);
     const cell = float(cellSize);
 
     mat.positionNode = Fn(() => {
@@ -514,13 +526,12 @@ export class Flowers {
       const gz = floor(id.add(0.5).div(columns));
       const gx = id.sub(gz.mul(columns));
       const centre = env.viewPos.xz.add(flowerCentre.mul(shift));
-      const base = floor(centre.div(step2));
+      const base = floor(centre.div(cell));
       const halfSize = size.mul(0.5);
-      const g = base.add(mod(vec2(gx, gz).sub(base).add(halfSize), size).sub(halfSize)).toVar();
-      // Which cell of the world's grid this is.
-      const wc = (near ? g : vec2(g.x.mul(2).add(mod(g.y, 2)), g.y)).toVar();
-      // The far ring keeps the cells whose column and row add up to an even number.
-      const kept = step(mod(wc.x.add(wc.y), 2), 0.5);
+      // Which cell of the world's grid this is, and how near the rim of this ring's patch of it (1 at the rim).
+      const fromBase = mod(vec2(gx, gz).sub(base).add(halfSize), size).sub(halfSize).toVar();
+      const wc = base.add(fromBase).toVar();
+      const rim = fromBase.abs().div(halfSize);
 
       const seed = uint(wc.x.add(32768)).add(uint(wc.y.add(32768)).mul(uint(65536))).add(uint(977)).toVar();
       const r1 = hash(seed);
@@ -542,18 +553,26 @@ export class Flowers {
 
       // Flowers gather in drifts: a slow noise decides where they are thick.
       const drift = texture(tex.noise, xz.mul(1 / 21)).level(float(0)).g;
-      const chance = mask.a.mul(smoothstep(0.3, 0.62, drift).mul(0.85).add(0.1));
+      // None in the water or at its very edge.
+      const chance = mask.a.mul(smoothstep(0.3, 0.62, drift).mul(0.85).add(0.1)).mul(step(mask.b, WET_NO_FLOWERS));
       const dist = length(xz.sub(env.viewPos.xz));
       const grows = smoothstep(r3, r3.add(0.02), chance);
+      // A plant is drawn by one ring or the other and is always its full size. What changes with
+      // distance is only how far it has dissolved into view (see the fragment stage).
+      const isHead = attribute('aPart', 'float');
       let inRange: THREE.Node<'float'>;
+      let fade: THREE.Node<'float'>;
       if (near) {
-        // Plants the far ring keeps are drawn here right up to the hand-over; the rest thin out before it.
-        const goes = mix(float(THIN_FROM), float(THIN_TO), r6);
-        const thinned = float(1).sub(smoothstep(goes.sub(2.5), goes, dist));
-        inRange = mix(thinned, step(dist, HAND_OVER), kept);
+        inRange = step(dist, HAND_OVER);
+        fade = mix(float(1).sub(smoothstep(HAND_OVER - STEMS_GO_OVER, HAND_OVER - 0.5, dist)), float(1), isHead);
       } else {
-        inRange = step(HAND_OVER, dist).mul(float(1).sub(smoothstep(reach * 0.7, reach * 0.97, dist)));
+        const appears = mix(float(reach * EDGE_FROM), float(reach * EDGE_TO), r6);
+        inRange = step(HAND_OVER, dist).mul(step(dist, appears));
+        // (The patch of grid that follows the player is wide enough to hold everything in sight on
+        // an ordinary screen; on a very wide one its rim can come into view, so plants dissolve there too.)
+        fade = float(1).sub(smoothstep(appears.sub(EDGE_BAND), appears, dist)).mul(float(1).sub(smoothstep(0.9, 0.995, rim.x.max(rim.y))));
       }
+      vFade.assign(fade);
       const present = grows.mul(inRange);
 
       // Which kind: flowers grow in patches of one kind, a few metres across with wavering edges,
@@ -581,7 +600,6 @@ export class Flowers {
       const bend = env.windDir.mul(push).add(vec2(nod, nod.negate()));
 
       const tt = positionGeometry.y;
-      const isHead = attribute('aPart', 'float');
       const lean = tt.mul(tt);
       const top = vec3(xz.x.add(bend.x.mul(height).mul(lean)), ground.add(height.mul(tt)), xz.y.add(bend.y.mul(height).mul(lean)));
 
@@ -602,6 +620,7 @@ export class Flowers {
 
       // Where on the sheet this corner reads from: heads from the top half, stems (two tiles tall) from the bottom.
       const u = uv();
+      vSquare.assign(u);
       const headUv = tile.add(u).div(4);
       const stemUv = vec2(stem.add(u.x).div(4), u.y.mul(0.5).add(0.5));
       vSheet.assign(mix(stemUv, headUv, isHead));
@@ -619,9 +638,14 @@ export class Flowers {
     mat.opacityNode = painted.a;
     mat.alphaTest = 0.5;
     mat.alphaToCoverage = true;
+    // Dissolving into view: every pixel has a fixed threshold between 0 and 1 (a fine, even
+    // speckle) and is drawn once the card's fade has passed it. The same test throws away the
+    // spare corners of the one-triangle heads, which lie outside the head's own square.
+    const speckle = fract(fract(screenCoordinate.xy.dot(vec2(0.06711056, 0.00583715))).mul(52.9829189));
+    mat.maskNode = vFade.greaterThan(speckle).and(vSquare.x.lessThanEqual(1)).and(vSquare.y.greaterThanEqual(0));
     mat.normalNode = transformNormalToView(vNormal.normalize());
 
-    const mesh = new THREE.Mesh(flowerGeometry(columns * rows), mat);
+    const mesh = new THREE.Mesh(flowerGeometry(columns * rows, near), mat);
     mesh.frustumCulled = false;
     mesh.castShadow = false;
     mesh.receiveShadow = true;

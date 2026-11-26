@@ -101,7 +101,8 @@ for (const s of shots) {
       const dataUrl = await page.evaluate(() => window.__eastfar.capture());
       await writeFile(file, Buffer.from(dataUrl.split(',')[1], 'base64'));
     } else {
-      await page.screenshot({ path: file });
+      // Under the software renderer a frame at high quality can take many seconds, and the screenshot waits for one.
+      await page.screenshot({ path: file, timeout: 180000 });
     }
     console.log(
       `${s.name}: ${file}  (${((Date.now() - t0) / 1000).toFixed(1)}s, ${state.backend}, ${state.drawCalls} draws, ${Math.round(state.triangles / 1000)}k tris, pos ${state.x.toFixed(0)},${state.z.toFixed(0)} ${state.region})`,

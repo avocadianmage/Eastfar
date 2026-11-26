@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { CREEK_POINTS, MEADOW, SPAWN, STATUE, VILLAGE, playableSdf, regionAt } from '../../src/world/layout';
 import { Physics } from '../../src/world/physics';
-import { MASK_GRASS, bakeTerrain, heightAt, maskAt, waterDepthAt, type TerrainData } from '../../src/world/terrainData';
+import { MASK_FLOWERS, MASK_GRASS, MASK_WET, WET_NO_FLOWERS, WET_NO_GRASS, bakeTerrain, heightAt, maskAt, waterDepthAt, type TerrainData } from '../../src/world/terrainData';
 
 let terrain: TerrainData;
 let bakeMs = 0;
@@ -84,6 +84,44 @@ describe('creek', () => {
       expect(depth).toBeLessThan(1.2);
       expect(maskAt(terrain, p.x, p.z, MASK_GRASS)).toBe(0);
     }
+  });
+
+  it('keeps flowers out of the water and grass out of all but its very edge, without stripping the banks', () => {
+    // The shaders read the masks between samples, so this does too.
+    const read = (x: number, z: number, channel: number) => {
+      const fx = (x - terrain.minX) / terrain.cell;
+      const fz = (z - terrain.minZ) / terrain.cell;
+      const ix = Math.floor(fx);
+      const iz = Math.floor(fz);
+      const u = fx - ix;
+      const v = fz - iz;
+      const at = (i: number, j: number) => terrain.masks[((iz + j) * terrain.n + ix + i) * 4 + channel]! / 255;
+      return at(0, 0) * (1 - u) * (1 - v) + at(1, 0) * u * (1 - v) + at(0, 1) * (1 - u) * v + at(1, 1) * u * v;
+    };
+    let deepestFlower = 0;
+    let deepestGrass = 0;
+    let bank = 0;
+    let bankWithoutFlowers = 0;
+    for (let i = 20; i < terrain.creek.length; i += 3) {
+      const p = terrain.creek[i]!;
+      if (playableSdf(p.x, p.z) > 20) continue;
+      for (let a = -(p.width / 2 + 5); a <= p.width / 2 + 5; a += 0.2) {
+        const x = p.x - p.tz * a;
+        const z = p.z + p.tx * a;
+        const depth = p.level - heightAt(terrain, x, z);
+        const wet = read(x, z, MASK_WET);
+        if (wet < WET_NO_FLOWERS && read(x, z, MASK_FLOWERS) > 0.05) deepestFlower = Math.max(deepestFlower, depth);
+        if (wet < WET_NO_GRASS && read(x, z, MASK_GRASS) > 0.1) deepestGrass = Math.max(deepestGrass, depth);
+        if (depth < -0.15) {
+          bank++;
+          if (wet >= WET_NO_FLOWERS) bankWithoutFlowers++;
+        }
+      }
+    }
+    expect(deepestFlower).toBeLessThanOrEqual(0);
+    expect(deepestGrass).toBeLessThan(0.14);
+    expect(bank).toBeGreaterThan(5000);
+    expect(bankWithoutFlowers / bank).toBeLessThan(0.005);
   });
 
   it('has dry banks a few metres to either side', () => {
