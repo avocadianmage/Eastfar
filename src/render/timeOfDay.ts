@@ -52,16 +52,16 @@ const KEYS = [-18, -8, -2, 3, 10, 25, 58];
 
 const P = {
   zenith: ['#040817', '#0a1230', '#26407c', '#3d6cbc', '#3a80d6', '#2f7de4', '#2a79e8'].map(hex),
-  horizon: ['#0f1b38', '#272f56', '#d98860', '#f7bd80', '#e4dfcc', '#bedaf0', '#b4d6f4'].map(hex),
+  horizon: ['#18294e', '#2c3862', '#d98860', '#f7bd80', '#e4dfcc', '#bedaf0', '#b4d6f4'].map(hex),
   sun: ['#ff6a2a', '#ff6a2a', '#ff6f2e', '#ffa050', '#ffd49e', '#fff0d8', '#fff6e8'].map(hex),
   sunIntensity: [0, 0, 0.25, 1.35, 2.4, 3.0, 3.2],
-  ambientSky: ['#22346e', '#283a72', '#6f6c9c', '#a99cb6', '#b9c6e0', '#a9c9f2', '#a6c8f5'].map(hex),
-  ambientSkyIntensity: [0.62, 0.64, 0.78, 0.92, 1.0, 1.08, 1.1],
-  ambientGround: ['#0d1428', '#121a2c', '#3a3040', '#5a4a3c', '#5c6040', '#566a3a', '#566a3a'].map(hex),
-  ambientGroundIntensity: [0.4, 0.4, 0.46, 0.52, 0.56, 0.62, 0.62],
-  fog: ['#111e3e', '#252e54', '#c98c72', '#eec392', '#dfe1d6', '#c6ddf0', '#bedaf3'].map(hex),
-  haze: [0.00115, 0.00115, 0.0013, 0.0012, 0.0008, 0.00055, 0.0005],
-  mist: [0.0105, 0.0115, 0.0135, 0.0115, 0.0055, 0.0022, 0.0018],
+  ambientSky: ['#27397a', '#2c3e7c', '#6f6c9c', '#a99cb6', '#b9c6e0', '#a9c9f2', '#a6c8f5'].map(hex),
+  ambientSkyIntensity: [0.72, 0.72, 0.78, 0.92, 1.0, 1.08, 1.1],
+  ambientGround: ['#17224a', '#1a2548', '#3a3040', '#5a4a3c', '#5c6040', '#566a3a', '#566a3a'].map(hex),
+  ambientGroundIntensity: [0.5, 0.5, 0.46, 0.52, 0.56, 0.62, 0.62],
+  fog: ['#1e2f55', '#2c3964', '#c98c72', '#eec392', '#dfe1d6', '#c6ddf0', '#bedaf3'].map(hex),
+  haze: [0.00115, 0.00115, 0.0013, 0.0012, 0.0008, 0.0005, 0.00042],
+  mist: [0.013, 0.014, 0.0135, 0.0115, 0.005, 0.0013, 0.0009],
 };
 
 /** Dawn is pinker and mistier than dusk. */
@@ -150,13 +150,14 @@ export function timeOfDay(hour: number): TimeOfDay {
     fog = mixRgb(fog, DAWN_TINT, 0.28 * twilight);
   }
 
-  const sunIntensity = sampleNum(P.sunIntensity, k);
+  // The sun's light is gone a few degrees below the horizon, before the moon's begins.
+  const sunIntensity = sampleNum(P.sunIntensity, k) * smoothstep(-3, -1, e);
   const sunColor = scale(sample(P.sun, k), sunIntensity);
 
   // The moon takes over once the sun is well down; between the two there is
   // a short spell lit only by the sky, which hides the hand-over.
   const moonUp = smoothstep(1, 9, moon.elevation);
-  const moonStrength = MOON_INTENSITY * moonUp * smoothstep(-4.5, -10, e);
+  const moonStrength = MOON_INTENSITY * moonUp * (1 - smoothstep(-9, -4, e));
   const moonColor = scale(MOON_COLOR, moonStrength);
   const moonLit = sunIntensity <= 0.0001 && moonStrength > 0;
 
@@ -167,7 +168,7 @@ export function timeOfDay(hour: number): TimeOfDay {
   const mistBoost = morning ? 1 + 0.45 * twilight : 1;
 
   // Looking toward the light, fog glows with its colour.
-  const glowSource = moonLit ? scale(MOON_COLOR, 0.42 * moonUp) : scale(sample(P.sun, k), clamp(0.25 + sunIntensity * 0.32, 0, 1.2));
+  const glowSource = moonLit ? scale(MOON_COLOR, 0.62 * moonUp) : scale(sample(P.sun, k), clamp(0.25 + sunIntensity * 0.32, 0, 1.2));
   const fogLight: Rgb = [fog[0] + glowSource[0], fog[1] + glowSource[1], fog[2] + glowSource[2]];
 
   return {

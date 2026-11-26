@@ -10,6 +10,8 @@ export interface WorldTextures {
   normal: THREE.DataTexture;
   /** RGBA8: grass height, bare ground, wetness, flowers. */
   mask: THREE.DataTexture;
+  /** RGBA8: tree cover, conifer share. */
+  mask2: THREE.DataTexture;
   /** RGBA8 tiling noise, four different patterns. */
   noise: THREE.DataTexture;
 }
@@ -97,5 +99,13 @@ export function createWorldTextures(t: TerrainData): WorldTextures {
   mask.colorSpace = THREE.NoColorSpace;
   mask.needsUpdate = true;
 
-  return { height, normal, mask, noise: createNoiseTexture() };
+  const mask2 = new THREE.DataTexture(t.masks2, n, n, THREE.RGBAFormat, THREE.UnsignedByteType);
+  mask2.magFilter = THREE.LinearFilter;
+  mask2.minFilter = THREE.LinearMipmapLinearFilter;
+  mask2.generateMipmaps = true;
+  mask2.wrapS = mask2.wrapT = THREE.ClampToEdgeWrapping;
+  mask2.colorSpace = THREE.NoColorSpace;
+  mask2.needsUpdate = true;
+
+  return { height, normal, mask, mask2, noise: createNoiseTexture() };
 }

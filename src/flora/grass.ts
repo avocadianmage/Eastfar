@@ -88,9 +88,9 @@ export class Grass {
     const far = quality.grassDistance;
     this.reach = far;
     const rings: Ring[] = [
-      { cell: 0.15 / d, inner: 0, outer: 22, segments: 3, width: 0.05, heightScale: 1 },
-      { cell: 0.36 / d, inner: 17, outer: Math.min(64, far * 0.6), segments: 2, width: 0.1, heightScale: 1.05 },
-      { cell: 0.95 / d, inner: Math.min(52, far * 0.5), outer: far, segments: 1, width: 0.34, heightScale: 1.15 },
+      { cell: 0.15 / d, inner: 0, outer: 20, segments: 3, width: 0.05, heightScale: 1 },
+      { cell: 0.36 / d, inner: 15.5, outer: Math.min(50, far * 0.5), segments: 2, width: 0.1, heightScale: 1.05 },
+      { cell: 0.95 / d, inner: Math.min(40, far * 0.4), outer: far, segments: 1, width: 0.36, heightScale: 1.15 },
     ];
 
     for (const ring of rings) {
@@ -191,8 +191,8 @@ export class Grass {
 
       // Colour: dark at the root, bright at the tip, tinted by the patch of meadow it grows in.
       const fieldCol = grassColorNode(tex.noise, xz, true);
-      const shade = mix(float(0.4), float(1.22), pow(tt, 0.75));
-      const tip = mix(fieldCol, col('#c9d36a'), tt.mul(r2).mul(0.35));
+      const shade = mix(float(0.34), float(1.16), pow(tt, 0.8));
+      const tip = mix(fieldCol, col('#c2c56a'), tt.mul(r2).mul(0.4));
       const gustLight = push.mul(0.22).mul(tt).add(1);
       vColor.assign(tip.mul(shade).mul(r1.mul(0.22).add(0.89)).mul(gustLight));
 

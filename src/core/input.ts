@@ -15,6 +15,7 @@ export type Action =
   | 'attack'
   | 'inventory'
   | 'perfHud'
+  | 'mute'
   | 'flyUp'
   | 'flyDown';
 
@@ -34,6 +35,7 @@ const KEY_BINDINGS: Record<string, Action> = {
   Tab: 'inventory',
   Backquote: 'perfHud',
   F3: 'perfHud',
+  KeyM: 'mute',
   KeyQ: 'flyDown',
   KeyR: 'flyUp',
 };

@@ -37,7 +37,7 @@ export class Post {
       const c = hdr.rgb.mul(env.exposure).toVar();
       // A touch more colour and contrast than the raw render: painterly, not washed out.
       const luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
-      c.assign(mix(vec3(luma), c, 1.14).max(0));
+      c.assign(mix(vec3(luma), c, 1.08).max(0));
       c.assign(pow(c.div(0.18), vec3(1.06)).mul(0.18));
       // Cool the shadows and warm the highlights very slightly.
       const l2 = dot(c, vec3(0.2126, 0.7152, 0.0722));

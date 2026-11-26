@@ -70,9 +70,15 @@ async function boot(): Promise<void> {
   status.textContent = '';
   begin.hidden = false;
   begin.textContent = 'Begin';
-  begin.addEventListener('click', () => game.input.requestLock());
+  begin.addEventListener('click', () => {
+    game.audio.start();
+    game.input.requestLock();
+  });
   canvas.addEventListener('click', () => {
-    if (!game.input.locked) game.input.requestLock();
+    if (!game.input.locked) {
+      game.audio.start();
+      game.input.requestLock();
+    }
   });
   game.input.onLockChange = (locked) => {
     setPlaying(locked);

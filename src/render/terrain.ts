@@ -50,10 +50,10 @@ export function grassColorNode(noise: THREE.Texture, xz: Vec2Node, inVertexStage
   const n1 = tap(xz.mul(1 / 118)).r;
   const n2 = tap(xz.mul(1 / 31).add(vec2(0.31, 0.67))).g;
   const n3 = tap(xz.mul(1 / 9).add(vec2(0.13, 0.41))).a;
-  const deep = col('#2c6836');
-  const mid = col('#4c9136');
-  const sunny = col('#8fbc45');
-  const straw = col('#b9b65a');
+  const deep = col('#26542f');
+  const mid = col('#437d33');
+  const sunny = col('#7da43f');
+  const straw = col('#b0a556');
   const c = mix(deep, mid, smoothstep(0.28, 0.68, n1));
   const c2 = mix(c, sunny, smoothstep(0.42, 0.78, n2).mul(0.7));
   const c3 = mix(c2, straw, smoothstep(0.62, 0.9, n3).mul(0.28));
@@ -108,7 +108,7 @@ function buildGeometry(ring: number, levels: number, baseSpacing: number): THREE
 export class TerrainMesh {
   readonly mesh: THREE.Mesh;
 
-  constructor(scene: THREE.Scene, t: TerrainData, tex: WorldTextures, quality: Quality) {
+  constructor(scene: THREE.Scene, t: TerrainData, tex: WorldTextures, quality: Quality, treeFar: number) {
     const ring = quality.terrainRing;
     const levels = 6;
     const base = 64 / ring; // finest ring always reaches 64 m from the player
@@ -126,8 +126,14 @@ export class TerrainMesh {
       const morph = smoothstep(0.62, 0.82, d);
       const odd = fract(p0.div(s).mul(0.5)).mul(2);
       const p = p0.sub(odd.mul(s).mul(morph)).toVar();
-      const h = texture(tex.height, terrainUv(t, p)).level(float(0)).r;
-      return vec3(p.x, h, p.y);
+      const tuv = terrainUv(t, p);
+      const h = texture(tex.height, tuv).level(float(0)).r;
+      // Past the last drawn trees, wooded ground swells up to canopy height so far hills read as forest.
+      const cover = texture(tex.mask2, tuv).level(float(0)).r;
+      const crowns = texture(tex.noise, p.mul(1 / 46)).level(float(0)).b.mul(0.7).add(0.65);
+      const pd = length(p.sub(view));
+      const lift = cover.mul(9).mul(crowns).mul(smoothstep(treeFar * 0.82, treeFar * 0.98, pd));
+      return vec3(p.x, h.add(lift), p.y);
     })();
 
     const uv = terrainUv(t, positionWorld.xz);
@@ -155,6 +161,19 @@ export class TerrainMesh {
       const bed = mix(col('#4b3f30'), col('#8b8674'), fine.mul(0.8).add(blotch.mul(0.2)));
 
       const c = mix(soil, grassCol, smoothstep(0.03, 0.2, m.r)).toVar();
+
+      // Woodland: leaf litter underfoot nearby, a quilt of tree crowns from far away.
+      const m2 = texture(tex.mask2, uv);
+      const litter = mix(col('#3b4326'), col('#55502f'), blotch);
+      c.assign(mix(c, litter, smoothstep(0.35, 0.95, m2.r).mul(0.7)));
+      const crownNoise = texture(tex.noise, xz.mul(1 / 17)).g;
+      const crownFine = texture(tex.noise, xz.mul(1 / 6)).a;
+      const leafCanopy = mix(col('#2f5f2b'), col('#6f9f41'), smoothstep(0.3, 0.75, crownNoise));
+      const pineCanopy = mix(col('#173d2e'), col('#2f6644'), smoothstep(0.3, 0.75, crownNoise));
+      const canopyCol = mix(leafCanopy, pineCanopy, m2.g).mul(crownFine.mul(0.5).add(0.75));
+      const beyondTrees = smoothstep(treeFar * 0.8, treeFar * 0.97, dist);
+      c.assign(mix(c, canopyCol, beyondTrees.mul(smoothstep(0.15, 0.6, m2.r))));
+
       c.assign(mix(c, bed, smoothstep(0.15, 0.7, m.b)));
       c.mulAssign(mix(float(0.7), float(1.14), occl));
       c.mulAssign(fine.mul(0.16).add(0.92));

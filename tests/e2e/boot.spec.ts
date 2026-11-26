@@ -19,7 +19,7 @@ async function boot(page: Page, query = ''): Promise<string[]> {
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text());
   });
-  await page.goto(`/?autostart=1&nosave=1&backend=webgl&quality=low&${query}`);
+  await page.goto(`/?autostart=1&nosave=1&backend=webgl&${query.includes("quality=") ? "" : "quality=low&"}${query}`);
   await page.waitForFunction(
     () => {
       const api = (window as unknown as Partial<W>).__eastfar;
@@ -78,4 +78,25 @@ test('the invisible wall keeps the player on the walkable land', async ({ page }
   await page.waitForTimeout(12_000);
   const s = await state(page);
   expect(s.x).toBeGreaterThan(-160);
+});
+
+test('stays inside the draw-call and triangle budget at high quality', async ({ page }) => {
+  test.setTimeout(600_000);
+  await page.setViewportSize({ width: 320, height: 180 });
+  await boot(page, 'freeze=1&time=10:00&quality=high&pos=40,-330&yaw=20');
+  const views: [string, number, number, number][] = [
+    ['open meadow', 40, -330, 20],
+    ['creek bank', 96, -352, 255],
+    ['village green', -6, 8, 80],
+    ['forest edge', -150, -330, 300],
+  ];
+  for (const [name, x, z, yaw] of views) {
+    await page.evaluate(([px, pz, pyaw]) => (window as unknown as W).__eastfar.teleport(px!, pz!, pyaw), [x, z, yaw]);
+    const start = (await state(page)).frames;
+    await page.waitForFunction((f) => (window as unknown as W).__eastfar.state().frames >= f + 3, start, { timeout: 300_000 });
+    const s = await state(page);
+    expect(s.drawCalls, `${name}: draw calls`).toBeLessThanOrEqual(250);
+    expect(s.triangles, `${name}: triangles`).toBeLessThanOrEqual(1_500_000);
+    expect(s.triangles, `${name}: something is drawn`).toBeGreaterThan(100_000);
+  }
 });

@@ -5,12 +5,15 @@
  */
 import { clamp, fbm2, lerp, smoothstep, valueNoise2 } from '../core/rng';
 import { buildCreek, type CreekSample } from './creek';
-import { MEADOW, TERRAIN, VILLAGE, WORLD_SEED, eastOpening, farmsSdf, playableSdf } from './layout';
+import { MEADOW, STATUE, TERRAIN, VILLAGE, WORLD_SEED, eastOpening, farmsSdf, playableSdf } from './layout';
 
 export const MASK_GRASS = 0;
 export const MASK_DIRT = 1;
 export const MASK_WET = 2;
 export const MASK_FLOWERS = 3;
+/** Channels of the second mask texture. */
+export const MASK2_FOREST = 0;
+export const MASK2_CONIFER = 1;
 
 const FAR = 1e6;
 
@@ -26,6 +29,8 @@ export interface TerrainData {
   readonly normals: Uint8Array;
   /** RGBA8 per sample: grass height, bare dirt, wetness, flower density. */
   readonly masks: Uint8Array;
+  /** RGBA8 per sample: tree cover, share of conifers, (two spare channels). */
+  readonly masks2: Uint8Array;
   readonly creek: CreekSample[];
   /** Distance in metres to the creek centreline (very large when far away). */
   readonly creekDist: Float32Array;
@@ -213,7 +218,61 @@ export function bakeTerrain(): TerrainData {
     }
   }
 
-  return { n, cell, minX, minZ, size, heights, normals, masks, creek, creekDist, creekLevel, creekHalfWidth };
+  // --- Woods: thick on the hills around the walkable land, groves and lone trees within it. ---
+  const masks2 = new Uint8Array(count * 4);
+  for (let iz = 0; iz < n; iz++) {
+    const z = minZ + iz * cell;
+    for (let ix = 0; ix < n; ix++) {
+      const x = minX + ix * cell;
+      const i = iz * n + ix;
+      const rock = masks[i * 4 + MASK_DIRT]! / 255;
+      const sdf = playableSdf(x, z);
+      const wild = smoothstep(2, 34, sdf);
+      const open = eastOpening(x, z);
+      const wVillage = 1 - smoothstep(60, 120, Math.hypot(x - VILLAGE.x, z - VILLAGE.z));
+      const wFarm = 1 - smoothstep(-30, 20, farmsSdf(x, z));
+      const wMeadow = 1 - smoothstep(MEADOW.radius - 40, MEADOW.radius + 20, Math.hypot(x - MEADOW.x, z - MEADOW.z));
+
+      const grove = smoothstep(0.16, 0.4, fbm2(x / 72, z / 72, 3, seed + 900));
+      let forest = wild * 0.94;
+      // Groves gather toward the meadow's rim; a scatter of lone trees everywhere else.
+      const rim = smoothstep(0.35, 0.95, Math.hypot(x - MEADOW.x, z - MEADOW.z) / MEADOW.radius);
+      forest = Math.max(forest, grove * (0.18 + 0.5 * rim) * wMeadow);
+      forest = Math.max(forest, 0.022);
+      forest = lerp(forest, 0.014, wFarm * (1 - wild));
+      forest = lerp(forest, 0.02, wVillage);
+
+      // A ring of trees hides the statue's dell, with a gap on the south-east side to find it by.
+      const sdx = x - STATUE.x;
+      const sdz = z - STATUE.z;
+      const sd = Math.hypot(sdx, sdz);
+      if (sd < 46) {
+        const ring = smoothstep(9, 15, sd) * (1 - smoothstep(30, 46, sd));
+        const gap = smoothstep(0.75, 0.93, (sdx * 0.78 + sdz * 0.62) / Math.max(sd, 1e-3));
+        forest = Math.max(forest, ring * 0.9 * (1 - gap));
+        forest *= smoothstep(6, 10, sd);
+      }
+
+      const d = creekDist[i]!;
+      if (d < FAR) forest *= smoothstep(creekHalfWidth[i]! + 1.5, creekHalfWidth[i]! + 5, d);
+      forest *= 1 - smoothstep(0.35, 0.8, rock);
+
+      // Dark conifers take over on high ground and in the forest to the east.
+      const h = heights[i]!;
+      const conifer = clamp(smoothstep(34, 62, h) * 0.75 + open * 0.85 + fbm2(x / 130, z / 130, 2, seed + 950) * 0.3 - 0.05, 0, 1) * (0.25 + 0.75 * wild);
+
+      const o = i * 4;
+      masks2[o + MASK2_FOREST] = Math.round(clamp(forest, 0, 1) * 255);
+      masks2[o + MASK2_CONIFER] = Math.round(conifer * 255);
+
+      // Under trees the grass is short and patchy and few flowers grow.
+      const shade = smoothstep(0.3, 0.9, forest);
+      masks[o + MASK_GRASS] = Math.round(masks[o + MASK_GRASS]! * (1 - 0.6 * shade));
+      masks[o + MASK_FLOWERS] = Math.round(masks[o + MASK_FLOWERS]! * (1 - 0.8 * shade));
+    }
+  }
+
+  return { n, cell, minX, minZ, size, heights, normals, masks, masks2, creek, creekDist, creekLevel, creekHalfWidth };
 }
 
 /** Bilinear ground height at a world position (clamped at the edge of the grid). */
@@ -238,6 +297,13 @@ export function maskAt(t: TerrainData, x: number, z: number, channel: number): n
   const ix = clamp(Math.round((x - t.minX) / t.cell), 0, t.n - 1);
   const iz = clamp(Math.round((z - t.minZ) / t.cell), 0, t.n - 1);
   return t.masks[(iz * t.n + ix) * 4 + channel]! / 255;
+}
+
+/** Nearest-sample lookup of one channel of the second mask, as 0..1. */
+export function mask2At(t: TerrainData, x: number, z: number, channel: number): number {
+  const ix = clamp(Math.round((x - t.minX) / t.cell), 0, t.n - 1);
+  const iz = clamp(Math.round((z - t.minZ) / t.cell), 0, t.n - 1);
+  return t.masks2[(iz * t.n + ix) * 4 + channel]! / 255;
 }
 
 /** Surface normal (nearest sample). Writes into `out` and returns it. */
