@@ -1252,23 +1252,32 @@ const ARM_SLEEVE = { base: [0x5a, 0x77, 0x96], shade: [0x26, 0x37, 0x4e] };
 /**
  * How far each finger joint is bent, degrees: closed in a fist, and round a handle. VRoid's T-pose has the
  * right hand pointing along -x, palm down, the thumb lying alongside the first finger on the +z side; the
- * fingers close by turning about +z. Each thumb joint turns [about +y, about +z]: in a fist it swings across
- * the front of the curled fingers (toward -z), round a handle it closes down over them.
+ * fingers close by turning about +z. Each thumb joint turns [about +y, about +z, about +x] (in that order of
+ * application, last first): in a fist it wraps across the curled fingers' middle bones, its tip resting on
+ * the palm side of the middle finger, no higher than the first finger and short of the fist's front (the
+ * build logs how far it reaches; the angles were found by a search against those marks); round a handle it
+ * closes down over the fingers.
  */
 const HAND_POSES = {
-  fist: { Proximal: 88, Intermediate: 100, Distal: 70, thumb: [[20, 35], [-40, -10], [-50, -10]] },
+  fist: { Proximal: 88, Intermediate: 100, Distal: 70, thumb: [[-17, 24, 18], [-58, 7, -28], [-68, 4, -4]] },
   grip: { Proximal: 72, Intermediate: 78, Distal: 48, thumb: [[-15, 45], [-10, 35], [0, 35]] },
 };
+/** The hand is drawn this much larger than modelled, so that it fills the wide shirt cuff it comes out of. */
+const HAND_SCALE = 1.2;
+/** The thumb past its first joint is drawn this much smaller again, so that it ends on the curled first finger. */
+const THUMB_SCALE = 0.85;
 
 const axisAngle = (axis, radians) => {
   const [x, y, z] = unit(axis);
   const s = Math.sin(radians / 2);
   return [x * s, y * s, z * s, Math.cos(radians / 2)];
 };
-/** Column-major matrix of a translation and a rotation. */
-function compose(t, q) {
+/** Column-major matrix of a translation, a rotation and an even scale. */
+function compose(t, q, s = 1) {
   const [x, y, z, w] = q;
-  return [1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * (x * z - y * w), 0, 2 * (x * y - z * w), 1 - 2 * (x * x + z * z), 2 * (y * z + x * w), 0, 2 * (x * z + y * w), 2 * (y * z - x * w), 1 - 2 * (x * x + y * y), 0, t[0], t[1], t[2], 1];
+  const m = [1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * (x * z - y * w), 0, 2 * (x * y - z * w), 1 - 2 * (x * x + z * z), 2 * (y * z + x * w), 0, 2 * (x * z + y * w), 2 * (y * z - x * w), 1 - 2 * (x * x + y * y), 0, t[0], t[1], t[2], 1];
+  for (let i = 0; i < 11; i++) if (i % 4 !== 3) m[i] *= s;
+  return m;
 }
 
 /**
@@ -1318,6 +1327,7 @@ async function buildArm(id) {
   const material = doc.createMaterial('character');
   const scene = doc.createScene('arms');
   const extras = { kind: 'vroid', from: id };
+  let thumbPast = [];
   for (const [name, bend] of Object.entries(HAND_POSES)) {
     const rot = sk.names.map(() => [0, 0, 0, 1]);
     // In the T-pose the right hand points along -x with its palm down; a finger closes by turning about +z.
@@ -1330,12 +1340,16 @@ async function buildArm(id) {
     ['rightThumbMetacarpal', 'rightThumbProximal', 'rightThumbDistal'].forEach((n, k) => {
       const b = bone(n);
       if (b < 0) return;
-      const [aboutY, aboutZ] = bend.thumb[k].map((d) => (d * Math.PI) / 180);
-      rot[b] = qmul(axisAngle([0, 1, 0], aboutY), axisAngle([0, 0, 1], aboutZ));
+      const [aboutY, aboutZ, aboutX = 0] = bend.thumb[k].map((d) => (d * Math.PI) / 180);
+      rot[b] = qmul(qmul(axisAngle([0, 1, 0], aboutY), axisAngle([0, 0, 1], aboutZ)), axisAngle([1, 0, 0], aboutX));
     });
+    // Scaling a joint scales everything beyond it: the whole hand from the wrist, then the thumb again.
+    const scale = sk.names.map(() => 1);
+    if (bone('rightHand') >= 0) scale[bone('rightHand')] = HAND_SCALE;
+    if (bone('rightThumbProximal') >= 0) scale[bone('rightThumbProximal')] = THUMB_SCALE;
     const world = [];
     for (let j = 0; j < sk.names.length; j++) {
-      const local = compose(sk.translation[j], rot[j]);
+      const local = compose(sk.translation[j], rot[j], scale[j]);
       world.push(sk.parents[j] < 0 ? local : mulMat(world[sk.parents[j]], local));
     }
     const skin = world.map((m, j) => mulMat(m, Array.from(sk.inverseBind.subarray(j * 16, j * 16 + 16))));
@@ -1373,6 +1387,24 @@ async function buildArm(id) {
       position.push(...toFrame(outP));
       normal.push(...unit([dot3(outN, X), dot3(outN, Y), dot3(outN, Z)]));
     }
+    if (name === 'fist') {
+      // How far the thumb reaches forward (-z) of the curled fingers, and above them, for the log.
+      const reach = (pattern) => {
+        let ahead = -Infinity;
+        let above = -Infinity;
+        for (let v = 0; v < arm.vertexCount; v++) {
+          let top = 0;
+          for (let k = 1; k < 4; k++) if (arm.weights[v * 4 + k] > arm.weights[v * 4 + top]) top = k;
+          if (!pattern.test(sk.names[arm.joints[v * 4 + top]])) continue;
+          ahead = Math.max(ahead, -position[v * 3 + 2]);
+          above = Math.max(above, position[v * 3 + 1]);
+        }
+        return [ahead, above];
+      };
+      const thumb = reach(/^rightThumb(Proximal|Distal)/);
+      const fingers = reach(/^right(Index|Middle|Ring|Little)/);
+      thumbPast = thumb.map((t, a) => ((t - fingers[a]) * 100).toFixed(1));
+    }
     const acc = (type, array, normalized = false) => doc.createAccessor().setType(type).setArray(array).setNormalized(normalized).setBuffer(buffer);
     const prim = doc
       .createPrimitive()
@@ -1394,7 +1426,7 @@ async function buildArm(id) {
   await doc.transform(quantize({ quantizePosition: 14, quantizeNormal: 10, quantizeTexcoord: 14, quantizeColor: 8 }), meshopt({ encoder: MeshoptEncoder, level: 'medium' }));
   const file = join(OUT, 'arms_vroid.glb');
   await io.write(file, doc);
-  console.log('arms_vroid.glb: ' + id + "'s right arm, " + arm.indices.length / 3 + ' triangles in two poses, grip at ' + extras.grip.join(', ') + '; atlas ' + atlas.width + 'x' + atlas.height + ' ' + (atlas.bytes / 1000).toFixed(0) + ' kB');
+  console.log('arms_vroid.glb: ' + id + "'s right arm, " + arm.indices.length / 3 + ' triangles in two poses, grip at ' + extras.grip.join(', ') + ', fist thumb past the fingers by ' + thumbPast[0] + ' cm forward, ' + thumbPast[1] + ' cm up; atlas ' + atlas.width + 'x' + atlas.height + ' ' + (atlas.bytes / 1000).toFixed(0) + ' kB');
   return (await stat(file)).size + atlas.bytes;
 }
 
