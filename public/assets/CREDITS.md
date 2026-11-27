@@ -22,7 +22,7 @@ The kit's four trim textures are stacked into one image and its models thinned a
 
 | File | Made from | Author | Licence | Source |
 | --- | --- | --- | --- | --- |
-| `creek.mp3` | Park ambiences (small river) | Thimras | CC0 1.0 | https://opengameart.org/content/park-ambiences |
+| `creek.mp3` | Water trickle (a small burn in a wood) | FractalStudios | CC0 1.0 | https://commons.wikimedia.org/wiki/File:363120_fractalstudios_water-trickle.wav |
 | `crickets.mp3` | Crickets Ambient Noise - loopable | 2DPIXX | CC0 1.0 | https://opengameart.org/content/crickets-ambient-noise-loopable |
 | `fire.mp3` | Fireplace Sound loop | StarNinjas | CC0 1.0 | https://opengameart.org/content/fireplace-sound-loop |
 | `sfx.mp3` (footsteps on grass, earth, stone and wood; thumps) | Impact Sounds | Kenney | CC0 1.0 | https://kenney.nl/assets/impact-sounds |

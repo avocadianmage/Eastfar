@@ -15,6 +15,9 @@
 import { loadSounds, type BedName, type SoundBank } from './samples';
 
 /** What is underfoot. */
+/** The creek can be heard from this far off (metres). */
+const CREEK_HEARD_WITHIN = 30;
+
 export type Surface = 'grass' | 'dirt' | 'stone' | 'wood' | 'water';
 
 export interface AmbienceState {
@@ -303,7 +306,8 @@ export class Ambience {
     set(this.windFilter.frequency, (260 + s.wind * 620) * (s.indoors ? 0.55 : 1), 0.6);
     set(this.leafGain.gain, s.wind * s.wind * (0.012 + 0.05 * s.leafiness) * (s.indoors ? 0.15 : 1), 0.5);
 
-    const near = Math.max(0, 1 - s.creekDistance / 42);
+    // The creek is a small one: a quiet burble by its banks, gone a short walk away.
+    const near = Math.max(0, 1 - s.creekDistance / CREEK_HEARD_WITHIN);
     set(this.creekPan.pan, s.creekPan * Math.min(1, s.creekDistance / 8) * 0.7, 0.2);
     const rec = this.bedGain;
     if (this.bank) {
@@ -311,11 +315,11 @@ export class Ambience {
       set(this.creekGain.gain, 0, 0.8);
       set(this.cricketGain.gain, 0, 0.8);
       set(this.outdoors.frequency, s.indoors ? 1100 : 16000, 0.4);
-      set(rec.get('creek')!.gain, near * near * 0.85 * out, 0.3);
+      set(rec.get('creek')!.gain, near * near * 0.6 * out, 0.3);
       set(rec.get('crickets')!.gain, Math.max(0, night - 0.35) * 0.5 * out, 1.5);
       set(rec.get('fire')!.gain, s.hearth * s.hearth * 0.9, 0.4);
     } else {
-      set(this.creekGain.gain, near * near * 0.5, 0.3);
+      set(this.creekGain.gain, near * near * 0.22, 0.3);
       set(this.cricketGain.gain, Math.max(0, night - 0.35) * 0.07, 1.5);
     }
     // Birdsong is always synthesised: short, quiet phrases now and then, more often in full daylight.

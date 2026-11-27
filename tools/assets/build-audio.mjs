@@ -157,7 +157,8 @@ function clip(source, peak = 0.7, filter = '') {
 
 mkdirSync(OUT, { recursive: true });
 const beds = {
-  creek: bed('creek', 'park_ambience_river.wav', { length: 30, fade: 3, channels: 1, filter: 'highpass=f=140,lowpass=f=11000', level: -22, kbps: 72 }),
+  // A small burn trickling through a wood: a quiet burble, not a rush. (The first creek was a recording of a river, level and loud.)
+  creek: bed('creek', 'burn_trickle.mp3', { length: 24, fade: 3, channels: 1, filter: 'highpass=f=220,lowpass=f=9000', level: -30, kbps: 72 }),
   crickets: bed('crickets', 'crickets-oneloop.mp3', { length: 18, fade: 2, channels: 2, filter: 'highpass=f=900', level: -27, kbps: 80 }),
   fire: bed('fire', 'fire.wav', { length: 22, fade: 3, channels: 1, filter: 'highpass=f=90', level: -24, kbps: 64 }),
 };
@@ -201,7 +202,7 @@ writeFileSync(join(OUT, 'sounds.json'), JSON.stringify({ beds, sfx: marks }, nul
 
 /*
  * Sources (all CC0 1.0):
- *   park_ambience_river.wav                            "Park ambiences" by Thimras, opengameart.org/content/park-ambiences
+ *   burn_trickle.mp3                                   "Water trickle" by FractalStudios, commons.wikimedia.org/wiki/File:363120_fractalstudios_water-trickle.wav
  *   crickets-oneloop.mp3                               "Crickets Ambient Noise - loopable" by 2DPIXX, opengameart.org/content/crickets-ambient-noise-loopable
  *   fire.wav                                           "Fireplace Sound loop" by StarNinjas, opengameart.org/content/fireplace-sound-loop
  *   kenney_impact-sounds, kenney_rpg-audio             "Impact Sounds" and "RPG Audio" by Kenney, kenney.nl/assets

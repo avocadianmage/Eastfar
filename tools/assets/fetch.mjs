@@ -167,12 +167,15 @@ const exists = (p) => access(p).then(() => true, () => false);
 
 /**
  * Recordings for tools/assets/build-audio.mjs, all CC0: single files from
- * OpenGameArt, and two packs from kenney.nl (fetched through the site's own
- * "continue without donating" link, then unpacked in memory).
+ * OpenGameArt and Wikimedia Commons, and two packs from kenney.nl (fetched
+ * through the site's own "continue without donating" link, then unpacked in
+ * memory).
  */
 const AUDIO_OUT = join(ROOT, '.cache', 'audio');
 const AUDIO_FILES = {
-  'park_ambience_river.wav': 'https://opengameart.org/sites/default/files/park_ambience_river.wav',
+  // "Water trickle" by FractalStudios: a small burn in a wood. (Commons' MP3 of it; the site often refuses the original WAV to scripts.)
+  'burn_trickle.mp3':
+    'https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a6/363120_fractalstudios_water-trickle.wav/363120_fractalstudios_water-trickle.wav.mp3',
   'crickets-oneloop.mp3': 'https://opengameart.org/sites/default/files/crickets-oneloop.mp3',
   'fire.wav': 'https://opengameart.org/sites/default/files/fire.wav',
 };
