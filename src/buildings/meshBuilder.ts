@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Collects boxes, quads and cylinders into one mesh with per-face colour and
  * lighting hints. Buildings are made of hundreds of small parts; merging them

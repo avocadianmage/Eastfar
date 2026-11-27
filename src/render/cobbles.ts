@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Cobblestones for the village streets: one square of setts, painted once and
  * tiled across the ground. Two textures come out of it: the stones' colours,

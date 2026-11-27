@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Fetches the source files the asset build needs out of the free ("Standard")
  * tiers of Quaternius's CC0 packs on itch.io, into .cache/packs/ (git-ignored).

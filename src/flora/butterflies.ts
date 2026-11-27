@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Butterflies over the meadow flowers by day. Placed and animated on the GPU
  * on a wrapping grid around the player: each has a pair of wings that flap

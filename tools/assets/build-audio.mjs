@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Builds the recorded sounds in public/assets/audio/ from public-domain (CC0)
  * recordings in .cache/audio/ (see the list at the bottom of this file for

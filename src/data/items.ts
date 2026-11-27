@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /** Every item in the game. Add an entry here and it can be picked up, carried, equipped, used and sold. */
 export type EquipSlot = 'weapon' | 'outfit' | 'charm';
 

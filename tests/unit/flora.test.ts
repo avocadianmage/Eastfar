@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import { beforeAll, describe, expect, it } from 'vitest';
 import { placeRocks, placeTrees, type TreeSet } from '../../src/world/flora';
 import { MEADOW, SPAWN, STATUE, playableSdf } from '../../src/world/layout';

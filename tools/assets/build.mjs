@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Builds the game-ready character assets in public/assets/characters/ from the
  * source packs in .cache/packs/ (see fetch.mjs):

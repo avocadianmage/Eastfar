@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Small code-made pieces the packs do not have, built straight onto a bone:
  * returned as primitives in the same shape as lib/source.mjs gives, with a

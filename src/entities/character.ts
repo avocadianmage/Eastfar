@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * One animated figure: a skinned model with its own bones, three levels of
  * detail, cross-faded animation clips and a head that can turn to look at

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Where everything is. World axes: +x is east, -z is north, y is up, units are
  * metres. The village sits at the origin; the journey trends east.

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Renderer setup. Uses WebGPU where the browser supports it and falls back to
  * WebGL2 automatically; all materials are written once in TSL and run on both.

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Puts the buildings into the world: one merged mesh per building, solid
  * walls and furniture, doors that swing, window glass that glows at night,

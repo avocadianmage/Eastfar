@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Trees. Two kinds (a round broadleaf and a dark conifer), each in three
  * levels of detail. Tree positions are fixed (see world/flora.ts); as the

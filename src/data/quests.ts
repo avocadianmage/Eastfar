@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Quests, written as data. Each has a giver, things to do, the words spoken
  * about it, and a reward. Add an entry here and the giver will offer it.

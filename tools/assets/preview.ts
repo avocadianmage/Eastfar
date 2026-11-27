@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * A bare viewer for built character assets, driven by preview.mjs.
  * Query: model, clip, t (seconds), lod, views=kind:yaw,kind:yaw (kind: full | face | hands | feet).

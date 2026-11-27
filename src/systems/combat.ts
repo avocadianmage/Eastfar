@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Fighting. Click to swing whatever is in hand (fists if nothing); the blow
  * lands a moment into the swing on the nearest thing in reach ahead. Pure

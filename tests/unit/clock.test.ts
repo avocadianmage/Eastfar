@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import { GameClock, NEW_GAME_HOUR, REAL_SECONDS_PER_DAY } from '../../src/core/clock';
 

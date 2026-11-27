@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * The rules of play: what the player can interact with (people, doors,
  * beds), conversations and quests, the pack screen, resting, health, and

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * The pack and journal screen (Tab). Mouse-driven: click an item to select
  * it, then equip, eat or drop it. The journal lists quests under way and

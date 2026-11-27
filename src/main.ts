@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import { parseParams } from './core/params';
 import { Game } from './game';
 import { REGION_LABELS } from './world/layout';

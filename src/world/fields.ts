@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * The Farms: crop fields, scarecrows and the old gate, as data. Fields are
  * rectangles of wheat or rows of greens laid out either side of the East

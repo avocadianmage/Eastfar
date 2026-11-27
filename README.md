@@ -29,8 +29,14 @@ Open the published link (GitHub Pages), click **Begin**, and walk.
 
 ## Develop
 
+Needs Node.js 22. The end-to-end tests and the screenshot tools also need a browser for Playwright, installed once with the second command.
+
 ```bash
 npm install
+```
+
+```bash
+npx playwright install chromium
 ```
 
 ```bash
@@ -97,6 +103,21 @@ npm run build && node tools/shots.mjs noon="time=12:00&pos=40,-330&yaw=45" night
 Add `--webgpu` to capture through the WebGPU renderer instead of WebGL2.
 
 See [docs/DESIGN.md](docs/DESIGN.md) for the design and milestone plan.
+
+## Licence
+
+Copyright © 2026 the Eastfar authors.
+
+**The code** (everything in this repository except the files under `public/assets/`) is free software: you can redistribute it and modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License or (at your option) any later version. It is distributed in the hope that it will be useful, but without any warranty; without even the implied warranty of merchantability or fitness for a particular purpose. See [LICENSE](LICENSE) for the full text. Source files carry the tag `SPDX-License-Identifier: GPL-3.0-or-later`.
+
+**The art and sound** in `public/assets/` are not covered by the GPL. Each file is listed with its own terms in [public/assets/CREDITS.md](public/assets/CREDITS.md):
+
+- Everything there today is public domain (CC0 1.0): it is built from CC0 packs and recordings, and the changes made to them here are released under CC0 as well.
+- Characters made with [VRoid Studio](https://vroid.com/en/studio), when they arrive, are **not** CC0 and **not** GPL. They contain meshes and textures that belong to pixiv Inc. and are used under pixiv's conditions (the [VRoid Studio Guidelines](https://vroid.com/en/studio/guidelines) and the [sample models' conditions of use](https://vroid.pixiv.help/hc/en-us/articles/4402394424089)). You may use, change and share those files free of charge under the same conditions; you may not release them as CC0, sell the model files, or use their data to build a character-creation tool.
+
+The terrain, plants, buildings, sky, water, birdsong, wind and music are made by the code as the game runs.
+
+**Bundled libraries.** The built game contains [three.js](https://threejs.org) (MIT, with the meshoptimizer decoder, also MIT) and the [Rapier](https://rapier.rs) physics engine (Apache-2.0). Both licences are compatible with GPL version 3. Their notices are shipped beside the game as `THIRD-PARTY-NOTICES.txt` (written by the build, see `vite.config.ts`). New dependencies must be under licences compatible with GPL version 3 (MIT, BSD, ISC, Apache-2.0 and MPL-2.0 are).
 
 ## Credits
 

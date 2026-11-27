@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * What the asset build makes: which pack pieces go into each character, the
  * colours they are tinted, and which animation clips are kept.

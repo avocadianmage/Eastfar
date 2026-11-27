@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /** Named places that quests can send the player to. */
 import { STATUE } from '../world/layout';
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import { DynamicResolution } from '../../src/render/dynamicResolution';
 import { SUNRISE, SUNSET, moonAt, sunAt, timeOfDay } from '../../src/render/timeOfDay';

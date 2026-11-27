@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Where trees and rocks stand. Decided once from the baked world data with a
  * seeded scatter, so the world is the same for every player. Pure maths, no

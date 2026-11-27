@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * On-screen performance readout (toggle with ` or F3). Browsers cap frame
  * rate at the monitor's refresh rate, so frame time in milliseconds is the

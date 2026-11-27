@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Shared shader inputs for the whole world: where the sun and moon are, what
  * colour the light and fog are, how the wind blows. Every material reads the

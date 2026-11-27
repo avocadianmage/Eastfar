@@ -1,6 +1,10 @@
-# Asset credits
+# Asset credits and licences
 
-Everything here is built by `tools/assets/build.mjs` from packs released into the public domain (CC0 1.0). No attribution is required; it is given gladly.
+The game's code is under the GNU GPL, version 3 or later. **The files in this folder are not**: each has the terms given for it below.
+
+Everything listed here today is built by the scripts in `tools/assets/` from packs and recordings released into the public domain (CC0 1.0), and the changes made to them here are released under CC0 1.0 as well. No attribution is required; it is given gladly.
+
+Characters made with VRoid Studio will be listed in a section of their own when they are added. They are not CC0 and not GPL: they contain meshes and textures belonging to pixiv Inc., used under pixiv's conditions of use, and may be shared free of charge under those conditions only (never as CC0, never sold as model files, never as data for a character-creation tool).
 
 ## Characters and animation (`characters/`)
 

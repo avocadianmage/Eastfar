@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Crows over the wheat. By day they wheel above the fields in small flocks;
  * every so often one folds its wings and comes down at the player, pecks,

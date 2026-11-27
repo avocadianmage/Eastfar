@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /** Player preferences, kept in the browser between visits. */
 import type { QualityName } from './params';
 

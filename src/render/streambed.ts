@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * The bed of the creek: one square of river stones lying in sand and grit,
  * painted once and tiled along the stream. The ground under the water and

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /** Small, fast, seedable random number helpers so the world is identical for everyone. */
 
 /** mulberry32: returns a function yielding floats in [0, 1). */

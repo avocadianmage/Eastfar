@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Builds the furniture and props in public/assets/props/ from the Fantasy
  * Props MegaKit in .cache/packs/props (see fetch.mjs):

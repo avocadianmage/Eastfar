@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * The building kit: draws a building from its description. Walls, floors,
  * stairs and furniture blocks come from world/buildingLayout.ts (the same

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Turns the time of day into light: where the sun and moon are, and the
  * colours of sky, light, shadow and mist. Pure maths so it can be tested.

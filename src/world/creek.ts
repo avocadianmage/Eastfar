@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * The creek's path: a smooth curve through the control points in layout.ts,
  * sampled at one-metre steps. The water level only ever falls along its length

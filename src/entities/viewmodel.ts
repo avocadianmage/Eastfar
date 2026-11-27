@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * What the player sees of themselves: their right forearm and hand at the
  * lower right, as a fist or closed round whatever is equipped (a stick, a

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * What the player carries: a grid of item stacks, three equipment slots and
  * a purse. Pure logic with no rendering, so it is easy to test and to save.

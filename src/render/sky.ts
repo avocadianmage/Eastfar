@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * The sky dome (gradient, sun, moon, stars, clouds), the sun/moon light with
  * its shadow, soft sky light, and the fog and ground mist that tie distance

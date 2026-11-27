@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Scarecrows in the fields. By day every one of them hangs on its post, old
  * clothes stuffed with straw. After dark some come down and shamble toward

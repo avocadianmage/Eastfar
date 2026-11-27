@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Loading the game's character assets (made by tools/assets/build.mjs): one
  * shared colour atlas, one skinned model per character, and the animation

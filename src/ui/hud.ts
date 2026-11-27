@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * The heads-up display: time of day, health, the current quest, the "press E"
  * prompt, short notices, and the dialogue box. Plain DOM over the canvas.

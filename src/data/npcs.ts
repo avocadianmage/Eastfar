@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * The people of the Quiet Village. Each has a home (a building id), a place
  * they spend the day, and a spot indoors at night. Quests they give live in

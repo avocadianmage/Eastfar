@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * The creek's water: a ribbon laid along the creek's path. The creek is
  * shallow and its water is clear, so most of what is seen is the bed: the

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * The material for people and other skinned figures: colour from the shared
  * character atlas, tinted per vertex, and lit like the buildings they stand

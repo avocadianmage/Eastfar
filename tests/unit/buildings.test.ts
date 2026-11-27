@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import { BRIDGE, BUILDINGS, PATHS, WALL_THICKNESS, buildingAt, doorstep, footprintSdf, toLocal, toWorld, type WallName } from '../../src/world/buildings';
 import { STAIR_STEPS, buildingBoxes, storeyFloor, wallFrame, wallTop, type Box } from '../../src/world/buildingLayout';

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Rocks: creek stones, field stones and boulders. Positions are fixed (see
  * world/flora.ts); they are drawn as two instanced meshes (small and large)

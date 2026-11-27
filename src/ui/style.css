@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 :root {
   --ink: #f3ead8;
   --ink-dim: #c9bfa8;
@@ -707,4 +708,13 @@ body {
   margin-top: 1.4rem;
   font-size: 0.78rem;
   color: rgba(201, 191, 168, 0.6);
+}
+
+.credits a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.credits a:hover {
+  color: rgba(232, 224, 204, 0.95);
 }

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /** Graphics presets. "High" is the 120 FPS target on a mid-range gaming GPU. */
 import type { QualityName } from '../core/params';
 

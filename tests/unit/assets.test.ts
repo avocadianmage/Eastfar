@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /// <reference types="node" />
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';

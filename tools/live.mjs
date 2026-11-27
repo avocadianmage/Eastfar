@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Smoke test of the published game: loads it in a headless browser, waits for
  * the world to come up, and reports failed requests and console errors.

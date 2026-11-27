@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Which modelled props stand where: the furniture inside each building (one
  * model per furniture block, stretched to the block so drawing and collision

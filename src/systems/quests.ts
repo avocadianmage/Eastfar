@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Tracks which quests are active and how far along they are. Pure logic: the
  * game reports events ("a crow was defeated", "the player reached the

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * The game clock. One full day/night cycle takes six real hours, so one real
  * second is four game seconds. The clock belongs to a save: it only advances

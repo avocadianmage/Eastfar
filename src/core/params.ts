@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Debug parameters read from the page URL. They make screenshots and tests
  * deterministic, e.g. `?time=22:30&pos=120,-340&yaw=90&quality=high&freeze`.

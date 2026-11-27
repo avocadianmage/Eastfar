@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Moonlight Caps: small pale mushrooms in the meadow that glow after dark.
  * Drawn as one instanced mesh; a picked cluster disappears and grows back

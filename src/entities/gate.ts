@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * The old boundary: a drystone wall running north-south where the farmland
  * meets the forest, with a chained gate where the East Road passes through.

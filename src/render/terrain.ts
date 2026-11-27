@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Draws the land as one mesh of nested rings centred on the player: fine
  * near, coarse far. Heights come from the baked height texture in the vertex

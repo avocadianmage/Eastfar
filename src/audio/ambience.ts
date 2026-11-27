@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * The soundscape: wind that rises with the gusts, the creek (louder and
  * panned as you near it), birdsong by day, crickets and the odd owl at night,

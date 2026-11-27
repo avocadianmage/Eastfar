@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Wild bee swarms in the meadow. Each swarm hangs around a hive on a stump;
  * come too close and it gives chase and stings. A few blows break it up. All

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Bakes the land: a grid of heights, surface normals and "what grows here"
  * masks for the whole first region. Pure maths with no rendering, so it runs

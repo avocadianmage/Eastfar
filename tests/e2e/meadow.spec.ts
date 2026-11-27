@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import { expect, test, type Page } from '@playwright/test';
 
 type W = { __eastfar: { ready: boolean; error?: string; state(): { frames: number }; mode(): string; health(): number; questStatus(id: string): string } };

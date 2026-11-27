@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Post-processing: the scene is drawn to an off-screen HDR image, bright
  * things bloom (sun, moon, fireflies, glints on water), then the image is

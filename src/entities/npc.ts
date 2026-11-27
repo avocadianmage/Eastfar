@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Villagers: animated figures (see character.ts), each with their own model.
  * They stand at their day spot or, at night, indoors at home; they turn to

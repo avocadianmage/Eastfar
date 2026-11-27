@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Fireflies: small drifting, blinking lights over the grass at night. Placed
  * by the GPU on a wrapping grid around the player, like the grass, so they

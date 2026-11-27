@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /** GPU textures built from baked world data, plus a shared tiling noise texture. */
 import * as THREE from 'three/webgpu';
 import { hash2 } from '../core/rng';

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * First-person player: mouse look, WASD, sprint, jump, with collision from
  * the physics world. Movement runs every rendered frame so it stays smooth at

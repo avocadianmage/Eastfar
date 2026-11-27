@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Reading the source packs: glTF files as plain typed arrays, without the
  * textures they refer to (the build makes its own atlas from the base-colour

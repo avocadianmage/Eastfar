@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * The statue of Aleric: a weathered stone figure on a plinth, tucked in a
  * ring of trees at the meadow's edge, facing the sunrise.

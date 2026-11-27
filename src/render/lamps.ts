@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Hearths and candles. The nearest few to the player are passed to every
  * "made" material (buildings, props, people) each frame, so indoor surfaces

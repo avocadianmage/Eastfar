@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * The material for furniture and props: colour from the kit's trim textures
  * (stacked in one image that repeats sideways), tinted per vertex, and lit

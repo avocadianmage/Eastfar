@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Recorded sounds (made by tools/assets/build-audio.mjs from public-domain
  * recordings): beds that loop without a seam, and one file of short sounds

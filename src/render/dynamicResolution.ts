@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Holds the frame rate by lowering the internal render resolution when frames
  * run long, and carefully raising it again when there is room.

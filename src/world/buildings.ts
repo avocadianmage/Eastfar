@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Roads and buildings, as data. Every building is enterable: this file says
  * where each one stands, where its door and windows are and what is inside.

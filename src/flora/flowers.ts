@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Wildflowers. Placed by the GPU on a wrapping grid, the same way as the
  * grass. There are eight kinds, each painted in its own colours and shape and

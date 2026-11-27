@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Grass. Every blade is placed by the GPU: each instance works out its own
  * spot on an endless grid that wraps around the player, reads the ground

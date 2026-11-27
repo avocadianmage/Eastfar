@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Collision. Rapier provides a solid terrain heightfield, static colliders for
  * buildings and props, and a kinematic character controller that slides along

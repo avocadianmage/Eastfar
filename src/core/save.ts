@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Saved games. Progress lives in the browser's local storage: no accounts,
  * nothing leaves the player's machine. The data carries a version number so

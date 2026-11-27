@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Turns a building's description into solid boxes: wall pieces around the
  * door and windows, floors, stairs and furniture. One list drives both what

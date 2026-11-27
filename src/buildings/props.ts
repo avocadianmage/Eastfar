@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Furniture and props drawn from models: for each building, everything in and
  * around it is merged into one mesh (so a furnished house costs one draw call)

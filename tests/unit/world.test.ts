@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import { beforeAll, describe, expect, it } from 'vitest';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { CREEK_POINTS, MEADOW, SPAWN, STATUE, VILLAGE, playableSdf, regionAt } from '../../src/world/layout';
