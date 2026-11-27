@@ -1271,10 +1271,10 @@ const HAND_SCALE = 1.3;
 const CUFF_GATHER = 0.07;
 const CUFF_ROOM = 0.004;
 /**
- * The rest of the sleeve, up to the shoulder, is drawn this much of the way to the cuff's shape, so that the arm
- * is slim enough for the hand and runs smoothly down into the cuff instead of stepping in at it.
+ * The rest of the sleeve, up to the shoulder, is drawn as an even tube round the arm's line: the cuff's size at
+ * the wrist, this much wider by the shoulder. So the arm suits the hand, and runs smoothly into the cuff.
  */
-const SLEEVE_SLIM = 0.75;
+const SLEEVE_FLARE = 0.2;
 /** The thumb past its first joint is drawn this much smaller again, so that it ends on the curled first finger. */
 const THUMB_SCALE = 0.85;
 
@@ -1302,8 +1302,9 @@ function compose(t, q, s = 1) {
  * The sleeve's end and the wrist inside it are each taken as an ellipse round the arm (fitted outside every
  * point), and the end is carried smoothly onto the wrist's, CUFF_ROOM wider, then let out round the thumb's
  * root where that stands out of it: fully as far back as the end's slanted edge reaches, then less and less to
- * CUFF_GATHER beyond, where the rest of the sleeve keeps SLEEVE_SLIM of it. The folds keep their shape, only
- * smaller.
+ * CUFF_GATHER beyond. The rest of the sleeve is measured slice by slice along the arm and each slice brought
+ * onto the same middle and to the cuff's size, growing by SLEEVE_FLARE to the shoulder (never let out), so the
+ * sleeve is an even tube however full or lopsided it was. The folds keep their shape, only smaller.
  */
 function cuffGather(position, cloth, skin, lump) {
   const count = position.length / 3;
@@ -1398,6 +1399,35 @@ function cuffGather(position, cloth, skin, lump) {
     const fits = 1 / Math.hypot(cu / to.a[0], cw / to.a[1]);
     return Math.max(1, want / fits);
   };
+  // The sleeve, slice by slice: every centimetre along it, the middle and half-widths of the cloth within a
+  // couple of centimetres (a slice with too little in it, as where the arm is cut at the shoulder, takes the
+  // last good one's), smoothed along the arm.
+  let far = -Infinity;
+  for (let v = 0; v < count; v++) if (cloth[v]) far = Math.max(far, position[v * 3 + 2]);
+  const STEP = 0.01;
+  const raw = [];
+  for (let z = nearest; z <= far; z += STEP) {
+    let [x0, x1, y0, y1, n] = [Infinity, -Infinity, Infinity, -Infinity, 0];
+    for (let v = 0; v < count; v++) {
+      if (!cloth[v] || Math.abs(position[v * 3 + 2] - z) > 0.025) continue;
+      const [x, y] = [position[v * 3], position[v * 3 + 1]];
+      [x0, x1, y0, y1] = [Math.min(x0, x), Math.max(x1, x), Math.min(y0, y), Math.max(y1, y)];
+      n++;
+    }
+    raw.push(n >= 12 ? [(x0 + x1) / 2, (y0 + y1) / 2, (x1 - x0) / 2, (y1 - y0) / 2] : raw[raw.length - 1]);
+  }
+  const slices = raw.map((_, i) => {
+    const near = raw.slice(Math.max(0, i - 2), i + 3).filter(Boolean);
+    return [0, 1, 2, 3].map((a) => near.reduce((sum, r) => sum + r[a], 0) / near.length);
+  });
+  const sliceAt = (z) => {
+    const f = Math.min(slices.length - 1, Math.max(0, (z - nearest) / STEP));
+    const i = Math.min(slices.length - 2, Math.floor(f));
+    const t = f - i;
+    return slices[i].map((a, k) => a + (slices[i + 1][k] - a) * t);
+  };
+  // How far the wrist's ellipse reaches along x and y: the tube's size at the cuff.
+  const reach = [0, 1].map((a) => Math.hypot(to.a[0] * to.u[a], to.a[1] * to.w[a]));
   const move = (p) => {
     const [x, y, z] = p;
     const dx = x - end.c[0];
@@ -1406,15 +1436,18 @@ function cuffGather(position, cloth, skin, lump) {
     const r = (dx * end.w[0] + dy * end.w[1]) / end.a[1];
     const ox = to.u[0] * s * to.a[0] + to.w[0] * r * to.a[1];
     const oy = to.u[1] * s * to.a[0] + to.w[1] * r * to.a[1];
-    const out = ox || oy ? letOut(ox, oy) - 1 : 0;
-    // At the cuff all the way onto the wrist and round the thumb's root; along the rest of the sleeve, part of
-    // the way onto the wrist's shape (SLEEVE_SLIM), the thumb's room fading out with the cuff.
+    const out = ox || oy ? letOut(ox, oy) : 1;
+    const cx = to.c[0] + ox * out;
+    const cy = to.c[1] + oy * out;
+    // The tube: this slice's middle onto the wrist's, its half-widths onto the cuff's, growing to the shoulder.
+    const [mx, my, hx, hy] = sliceAt(z);
+    const grow = 1 + SLEEVE_FLARE * Math.min(1, Math.max(0, (z - back) / (far - back)));
+    const tx = to.c[0] + (x - mx) * Math.min(1, (reach[0] * grow) / hx);
+    const ty = to.c[1] + (y - my) * Math.min(1, (reach[1] * grow) / hy);
+    // The cuff at the sleeve's end, the tube beyond CUFF_GATHER, and between the two eased together.
     const d = Math.min(1, Math.max(0, (z - back) / CUFF_GATHER));
     const cuff = 1 - d * d * (3 - 2 * d);
-    const t = SLEEVE_SLIM + (1 - SLEEVE_SLIM) * cuff;
-    const gx = to.c[0] + ox - x;
-    const gy = to.c[1] + oy - y;
-    return [x + gx * t + ox * out * cuff, y + gy * t + oy * out * cuff, z];
+    return [tx + (cx - tx) * cuff, ty + (cy - ty) * cuff, z];
   };
   const across = (e) => e.a.map((h) => (h * 200).toFixed(1)).join('x');
   const apply = (pos, nor, v) => {
@@ -1437,7 +1470,7 @@ function cuffGather(position, cloth, skin, lump) {
       nor[v * 3 + a] = turned[a];
     }
   };
-  apply.summary = `cuff gathered from ${across(end)} to ${across(to)} cm`;
+  apply.summary = `cuff gathered from ${across(end)} to ${across(to)} cm, sleeve ${reach.map((r) => (r * 200).toFixed(1)).join('x')} cm growing to ${reach.map((r) => (r * 200 * (1 + SLEEVE_FLARE)).toFixed(1)).join('x')}`;
   return apply;
 }
 
