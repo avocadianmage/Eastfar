@@ -1270,6 +1270,11 @@ const HAND_SCALE = 1.3;
  */
 const CUFF_GATHER = 0.07;
 const CUFF_ROOM = 0.004;
+/**
+ * The rest of the sleeve, up to the shoulder, is drawn this much of the way to the cuff's shape, so that the arm
+ * is slim enough for the hand and runs smoothly down into the cuff instead of stepping in at it.
+ */
+const SLEEVE_SLIM = 0.75;
 /** The thumb past its first joint is drawn this much smaller again, so that it ends on the curled first finger. */
 const THUMB_SCALE = 0.85;
 
@@ -1297,7 +1302,8 @@ function compose(t, q, s = 1) {
  * The sleeve's end and the wrist inside it are each taken as an ellipse round the arm (fitted outside every
  * point), and the end is carried smoothly onto the wrist's, CUFF_ROOM wider, then let out round the thumb's
  * root where that stands out of it: fully as far back as the end's slanted edge reaches, then less and less to
- * CUFF_GATHER beyond. The folds keep their shape, only smaller.
+ * CUFF_GATHER beyond, where the rest of the sleeve keeps SLEEVE_SLIM of it. The folds keep their shape, only
+ * smaller.
  */
 function cuffGather(position, cloth, skin, lump) {
   const count = position.length / 3;
@@ -1400,12 +1406,15 @@ function cuffGather(position, cloth, skin, lump) {
     const r = (dx * end.w[0] + dy * end.w[1]) / end.a[1];
     const ox = to.u[0] * s * to.a[0] + to.w[0] * r * to.a[1];
     const oy = to.u[1] * s * to.a[0] + to.w[1] * r * to.a[1];
-    const out = ox || oy ? letOut(ox, oy) : 1;
-    const gx = to.c[0] + ox * out;
-    const gy = to.c[1] + oy * out;
+    const out = ox || oy ? letOut(ox, oy) - 1 : 0;
+    // At the cuff all the way onto the wrist and round the thumb's root; along the rest of the sleeve, part of
+    // the way onto the wrist's shape (SLEEVE_SLIM), the thumb's room fading out with the cuff.
     const d = Math.min(1, Math.max(0, (z - back) / CUFF_GATHER));
-    const t = 1 - d * d * (3 - 2 * d);
-    return [x + (gx - x) * t, y + (gy - y) * t, z];
+    const cuff = 1 - d * d * (3 - 2 * d);
+    const t = SLEEVE_SLIM + (1 - SLEEVE_SLIM) * cuff;
+    const gx = to.c[0] + ox - x;
+    const gy = to.c[1] + oy - y;
+    return [x + gx * t + ox * out * cuff, y + gy * t + oy * out * cuff, z];
   };
   const across = (e) => e.a.map((h) => (h * 200).toFixed(1)).join('x');
   const apply = (pos, nor, v) => {
