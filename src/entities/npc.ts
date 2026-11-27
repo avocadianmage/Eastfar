@@ -9,6 +9,7 @@
 import * as THREE from 'three/webgpu';
 import type { CharacterAssets } from '../assets/loader';
 import { NPCS, type NpcDef } from '../data/npcs';
+import { env } from '../render/env';
 import { BUILDING_BY_ID, toWorld } from '../world/buildings';
 import type { Physics } from '../world/physics';
 import { heightAt, type TerrainData } from '../world/terrainData';
@@ -18,6 +19,8 @@ import { Character } from './character';
 const TURN_RADIUS = 5.5;
 /** Within this distance their head follows the player. */
 const LOOK_RADIUS = 9;
+/** Height of the packs' adult bodies, metres: what a height of 1 means. */
+const PACK_HEIGHT = 1.72;
 /** How far in front of a seat's middle a villager stands to sit squarely on it, metres. */
 const SEAT_OFFSET = 0.27;
 
@@ -35,12 +38,17 @@ export class Npc {
   /** True when they are sat down (at home in the evening, where there is a seat). */
   sitting = false;
   private collider: ReturnType<Physics['addStaticCylinder']> | null = null;
-  private readonly height: number;
+  /** Height as a share of the packs' adult body (colliders are sized from it). */
+  private height: number;
+  /** True when under a roof, where no wind stirs hair or skirts. */
+  indoors = false;
   private readonly idle: string;
   /** Seconds until they next bend to their work. */
   private workPause: number;
   private workIndex = 0;
   private working = false;
+  /** True when just put somewhere (unseen): the next pose is taken at once, and hair and skirt start from rest in it. */
+  private placed = true;
 
   constructor(
     readonly def: NpcDef,
@@ -54,9 +62,16 @@ export class Npc {
     this.idle = def.look.idle ?? 'Idle_Loop';
     this.workPause = 1.5 + ((index * 1.7) % 3);
     this.figure = new Character(assets, def.look.model, material);
-    const width = this.height * (def.look.build ?? 1);
-    this.figure.root.scale.set(width, this.height, width);
-    if (def.look.head) this.figure.bones.get('Head')!.scale.setScalar(def.look.head);
+    if (this.figure.body === 'vroid') {
+      // An anime character is modelled at her own size and shape; only a child is scaled, as a whole, to her stature.
+      const scale = def.look.stature ? def.look.stature / this.figure.height : 1;
+      this.figure.root.scale.setScalar(scale);
+      this.height = (this.figure.height * scale) / PACK_HEIGHT;
+    } else {
+      const width = this.height * (def.look.build ?? 1);
+      this.figure.root.scale.set(width, this.height, width);
+      if (def.look.head) this.figure.head.scale.setScalar(def.look.head);
+    }
     this.figure.root.name = `npc-${def.id}`;
     scene.add(this.figure.root);
     // Start everyone at a different point in their idle, so the village does not breathe in step.
@@ -70,6 +85,7 @@ export class Npc {
     this.yaw = this.restYaw;
     this.figure.root.position.copy(this.position);
     this.figure.root.rotation.y = Math.PI - this.yaw;
+    this.placed = true;
     if (this.physics) {
       if (this.collider) this.physics.removeCollider(this.collider);
       this.collider = this.physics.addStaticCylinder(x, y + 0.85 * this.height, z, 0.85 * this.height, 0.27);
@@ -81,7 +97,8 @@ export class Npc {
     const work = this.def.work;
     if (this.sitting) {
       this.working = false;
-      this.figure.play(this.talking ? 'Sitting_Talking_Loop' : 'Sitting_Idle_Loop', 0.35);
+      // Put on a stool while nobody watched, she is sitting already: she does not drop onto it, flinging her hair up.
+      this.figure.play(this.talking ? 'Sitting_Talking_Loop' : 'Sitting_Idle_Loop', this.placed ? 0 : 0.35);
       return;
     }
     if (this.talking) {
@@ -134,6 +151,12 @@ export class Npc {
     this.figure.root.rotation.y = Math.PI - this.yaw;
 
     this.animate(dt, near);
+    if (this.placed) {
+      this.figure.settle();
+      this.placed = false;
+    }
+    this.figure.speaking = this.talking;
+    this.figure.setWind(env.windDir.value.x, env.windDir.value.y, this.indoors ? 0 : env.windStrength.value);
     this.figure.lookAt(inView && dist < LOOK_RADIUS && sameFloor ? eye : null, this.yaw, dt);
     this.figure.update(dt, dist, inView);
   }
@@ -147,6 +170,8 @@ export class Npcs {
   private readonly eye = new THREE.Vector3();
   /** Which villager has which seat, so two do not sit on one stool. */
   private readonly seats = new Map<string, string>();
+  /** Nothing has been seen yet: the first update puts everyone where the hour says. */
+  private placed = false;
 
   constructor(
     scene: THREE.Scene,
@@ -236,12 +261,20 @@ export class Npcs {
     const y = this.physics?.groundBelow(x, ground + 2.2, z, 5) ?? ground;
     npc.place(x, y, z, yaw);
     npc.atNight = night;
+    npc.indoors = !!indoors;
   }
 
   update(dt: number, night: boolean, player: THREE.Vector3, camera: THREE.Camera): void {
     this.proj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     this.frustum.setFromProjectionMatrix(this.proj);
     camera.getWorldPosition(this.eye);
+    if (!this.placed) {
+      // The villagers are made before a saved game (or the page's time) sets the clock, so they start at their
+      // daytime places. Before the first frame nobody has seen them; put them where the hour says, or one in view
+      // of where the player starts (Maelin, by the well) would stay out all night.
+      for (const npc of this.all) if (npc.atNight !== night) this.station(npc, night);
+      this.placed = true;
+    }
     for (const npc of this.all) {
       this.sphere.center.copy(npc.position);
       this.sphere.center.y += 0.9;

@@ -113,7 +113,7 @@ export const QUESTS: readonly QuestDef[] = [
     requires: ['crows'],
     summary: 'Something moves in the Haywell fields after dark. Go out at night and put a stop to it.',
     offer: [
-      'Dorrin will not say it, so I will. The crows are not the trouble. The scarecrows are.',
+      'Dorrie will not say it, so I will. The crows are not the trouble. The scarecrows are.',
       'I set them myself, each on its post. Come morning they have moved. Not far. A row over. Turned to face the house. Last night one was at the gate.',
       'Go out after dark and see. And if they are walking, make them stop.',
     ],

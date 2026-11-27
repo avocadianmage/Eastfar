@@ -7,7 +7,7 @@
  *
  * Each argument is name=query; the query uses the debug URL parameters from
  * src/core/params.ts. `freeze`, `autostart` and `nosave` are always added.
- * Options: --size=1280x720  --out=shots  --frames=8  --webgpu  --hud  --full
+ * Options: --size=1280x720  --out=shots  --frames=8  --webgpu  --gpu  --hud  --full
  *          --eval="js to run in the page before capturing"
  */
 import { createServer } from 'node:http';
@@ -24,6 +24,7 @@ const MIME = {
   '.wasm': 'application/wasm',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
+  '.webp': 'image/webp',
   '.json': 'application/json',
   '.glb': 'model/gltf-binary',
   '.ogg': 'audio/ogg',
@@ -31,7 +32,7 @@ const MIME = {
 };
 
 const args = process.argv.slice(2);
-const opts = { size: '1280x720', out: 'shots', frames: '8', webgpu: false, hud: false, full: false, readback: false, eval: '' };
+const opts = { size: '1280x720', out: 'shots', frames: '8', webgpu: false, gpu: false, hud: false, full: false, readback: false, eval: '' };
 const shots = [];
 for (const a of args) {
   if (a.startsWith('--')) {
@@ -63,9 +64,11 @@ const server = createServer(async (req, res) => {
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const port = server.address().port;
 
-const launchArgs = ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
-if (opts.webgpu) launchArgs.push('--enable-unsafe-webgpu', '--use-webgpu-adapter=swiftshader', '--disable-gpu-sandbox');
-const browser = await chromium.launch({ args: launchArgs, channel: opts.full ? 'chromium' : undefined });
+// --gpu draws with the computer's own graphics card (full Chromium, no software renderer): much faster, and on
+// Windows the only way headless Chromium offers WebGPU at all.
+const launchArgs = opts.gpu ? ['--ignore-gpu-blocklist'] : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
+if (opts.webgpu) launchArgs.push(...(opts.gpu ? ['--enable-unsafe-webgpu'] : ['--enable-unsafe-webgpu', '--use-webgpu-adapter=swiftshader', '--disable-gpu-sandbox']));
+const browser = await chromium.launch({ args: launchArgs, channel: opts.full || opts.gpu ? 'chromium' : undefined });
 const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
 const problems = [];
 page.on('console', (m) => {
@@ -83,7 +86,8 @@ for (const s of shots) {
   if (opts.webgpu) q.set('offscreen', '1');
   const url = `http://127.0.0.1:${port}/?${q.toString()}`;
   const t0 = Date.now();
-  await page.goto(url);
+  // The page before may still be busy with a slow software-rendered frame: give leaving it time.
+  await page.goto(url, { timeout: 240000 });
   try {
     await page.waitForFunction(() => window.__eastfar && (window.__eastfar.ready || window.__eastfar.error), null, { timeout: 240000 });
     const err = await page.evaluate(() => window.__eastfar.error ?? null);

@@ -8,10 +8,10 @@
 | 1 | A walk in the meadow | Built; awaiting sign-off on look and frame time on a real GPU |
 | 2 | The Quiet Village | Built: roads, bridge, eight enterable buildings, six villagers with day/night routines, dialogue, quests, pack and journal, resting, saving. One quest (The Old Legend) is playable start to finish; the others are offered as their content arrives in milestones 3 and 4 |
 | 3 | Meadow content | Built: combat with a first-person arm and weapons, five bee swarms, Moonlight Caps that glow at night, butterflies, fainting, and trading with the blacksmith and innkeeper. The elder's, beekeeper's and herbalist's quests are playable start to finish |
-| 4 | The Farms | Built: eight crop fields (wheat and rows of greens), two farmhouses and three barns (all enterable), ten scarecrows of which five walk at night, twelve crows, the farmers Dorrin and Marta Haywell, and the chained gate in a boundary wall at the forest's edge. Both farm quests are playable |
+| 4 | The Farms | Built: eight crop fields (wheat and rows of greens), two farmhouses and three barns (all enterable), ten scarecrows of which five walk at night, twelve crows, the farmers Dorrie and Marta Haywell, and the chained gate in a boundary wall at the forest's edge. Both farm quests are playable |
 | 5 | Polish and ship | Partly done: settings (graphics, volume, mouse speed, music), first-minute hints, a lantern that lights the dark, soft generative music, credits. Still open: a pass on sound once someone has listened to it, balancing from real play, songbirds and fish, and any performance work the first real-GPU measurements call for |
 | 6 | Proper models, props and recorded sound | In progress. Done: the asset pipeline; all eight villagers as textured, animated characters (idle, talking, head following the player, work by day); scarecrows on the same skeleton (hanging on their posts by day, a hunched walk and clawing strike by night); furniture and props from models; and, from play-testing, close-up trees with real limbs and leaves, eight kinds of wildflower, gentle hills, cobbled village streets and no sprint warp; then trees that change detail in place, one flower to a spot in patches of a kind, birds back to the synthesised phrases, and a player who stays put when they stop; the player's own arm and weapons from models; recorded creek, crickets, hearth, footsteps and doors. Open: a listen to the recordings, and villagers walking between their places |
-| 7 | The anime cast | Decided, not started. Every person becomes an original anime-style female character, cel-shaded, made in VRoid Studio on the owner's computer by Claude through computer use. The handoff, with the cast, the plan and pixiv's licence conditions, is [ANIME-CAST.md](ANIME-CAST.md) |
+| 7 | The anime cast | Built: all eight villagers are original anime-style women made in VRoid Studio on the owner's computer by Claude through computer use, approved by the owner, and in the game (`tools/assets/build-vrm.mjs`): cel shading in the game's own light with ink outlines, the face's soft layers drawn blended, blinking and talking faces, hair and skirts on spring chains that give way to the legs and hands, the shared clips retargeted, seated at home in the evening. Open: the player's arm and the scarecrows' shading. How each was made, and pixiv's licence conditions, are in [ANIME-CAST.md](ANIME-CAST.md) |
 
 Decisions made while building milestones 0 and 1:
 
@@ -26,7 +26,7 @@ Decisions made while building milestone 2:
 
 - **Villagers are simple figures built in code for now**, not a downloaded character pack. Most free-asset sites are blocked from the build sandbox; the one reachable pack is armoured chibi adventurers that would not suit the village. Swapping in rigged CC0 characters remains open for milestone 5.
 - **Buildings are data** (`src/world/buildings.ts`): position, facing, door, windows, furniture, lamps. One layout (`buildingLayout.ts`) produces both the drawn boxes and the colliders. Adding a building is adding an entry.
-- **Who is who:** Maelin (elder, by the well), Orsolt (beekeeper), Wren Tallow (herbalist), Bram (blacksmith), Hesta (innkeeper, at The Lantern & Loaf), Pip (child). The farmers Dorrin and Marta Haywell arrive with the Farms.
+- **Who is who:** Maelin (elder, by the well), Orla (beekeeper), Wren Tallow (herbalist), Brenna (blacksmith), Hesta (innkeeper, at The Lantern & Loaf), Pip (child). The farmers Dorrie and Marta Haywell, sisters, arrive with the Farms.
 - **Beds:** the player may rest in their own cottage and in the inn's upstairs beds, until morning (07:00) or nightfall (21:00). Resting restores health and saves.
 - **Quests are gated on content:** each quest names the part of the world it needs (bees, mushrooms, crows, scarecrows) and is only offered once that part exists.
 - **Saving:** automatic, every 30 seconds and shortly after anything changes, when resting, and when the tab is hidden or the game is paused. A saved game shows "Continue" with a "Start a new game" option.
@@ -38,7 +38,7 @@ Decisions made while building milestone 3:
 - **Bee swarms:** five hives in the meadow. A swarm notices the player at 9 m, chases at 4.6 m/s (sprinting outruns it), gives up 28 m from home, stings for 1 every 0.9 s, and breaks up after 4 damage. Broken swarms re-form the next day. Each has a 60% chance to leave honeycomb.
 - **Health and fainting:** 10 health. Worn gear soaks damage but a hit always costs at least half a point. At zero the player faints and wakes the next morning in their own bed with nothing lost.
 - **Moonlight Caps:** 28 clusters along the creek banks and under meadow trees. Subtle by day; they glow strongly at night. A picked cluster grows back two days later.
-- **Trading** runs through the dialogue box: Bram sells the sword (60), lantern (25) and cloak (30); Hesta sells bread and apples and pays 6 for honeycomb.
+- **Trading** runs through the dialogue box: Brenna sells the sword (60), lantern (25) and cloak (30); Hesta sells bread and apples and pays 6 for honeycomb.
 - **Wildlife so far:** butterflies by day, fireflies by night. Songbirds and fish are left for milestone 5.
 
 Decisions made while building milestone 4:
@@ -48,7 +48,7 @@ Decisions made while building milestone 4:
 - **Scarecrows:** ten, one or two per field. The five in the eastern fields walk at night: they notice the player at 24 m, shamble at 2.1 m/s (slower than walking), strike for 2 after a half-second wind-up, and take 8 damage to put down. One put down stays down until the next night. By day, and whenever nobody is watching, they are back on their posts.
 - **Crows:** four flocks of three wheel above the wheat by day and are gone at night. One or two at a time dive at a player within about 34 m, peck for 1 and climb away; they can be hit while diving or climbing. A struck crow is back the next day.
 - **The eastern edge:** a drystone wall runs north-south at x ≈ 853 across the whole width of the farmland, with a chained timber gate where the East Road meets it. Dark conifer forest stands beyond. Looking at the gate gives a short narration; it does not open in this version.
-- **Quest order:** Dorrin offers "A Murder of Crows"; Marta offers "What Walks at Night" only after that is finished.
+- **Quest order:** Dorrie offers "A Murder of Crows"; Marta offers "What Walks at Night" only after that is finished.
 
 Decisions made while bringing in proper models (milestone 6):
 
@@ -87,6 +87,7 @@ Decisions for milestone 7 (the anime cast) and the licence, 27 November 2026:
 - **The cast becomes anime-style women**, original designs, cel-shaded. The beekeeper, the blacksmith and the farmer Dorrin, who were men, become women with new names and lines (proposed: Orla, Brenna, Dorrie; the Haywells as sisters). Pip stays a child; the scarecrows stay scarecrows; Aleric's statue was not discussed and stays.
 - **How they are made.** In VRoid Studio on the owner's computer, driven by Claude through computer use (untried; the first character is a trial), with the owner approving the look at checkpoints. Claude builds the import, the animation, the cel shading, blinking and talking faces, and moving hair. Code-made models, AI-generated models and bought models were considered and set aside: not good enough, not reliable enough, and not redistributable in a public repository.
 - **Details and the plan** are in [ANIME-CAST.md](ANIME-CAST.md).
+- **Built as planned, with these choices** (27 November): one atlas and one skinned mesh per character at three levels of detail, made by `tools/assets/build-vrm.mjs` from the raw VRM files (git-ignored, on the owner's computer); everything cut out at half alpha with alpha-to-coverage, except the face's soft layers (iris, glints, brows, lashes, eye line), which VRoid blends and which are drawn blended too, as a second draw of the nearest level; no outline where VRoid gives none (drawn at no width, the outline painted hair strands in ink); every skirt panel hung from a thigh rests along a line set by the hips, colliding with the thighs and the hands, so a seated skirt drapes instead of tearing and a hanging arm need only clear the hips; the shared clips are always fitted to the same reference skeleton, so rebuilding one character leaves the others' animations unchanged.
 
 ## Context
 

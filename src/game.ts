@@ -30,6 +30,7 @@ import { Grass } from './flora/grass';
 import { Rocks } from './flora/rocks';
 import { TREE_FAR, Trees } from './flora/trees';
 import { placeMoonCaps } from './world/flora';
+import { celMaterials } from './render/celMaterial';
 import { characterMaterial } from './render/characterMaterial';
 import { propMaterial } from './render/propMaterial';
 import { env } from './render/env';
@@ -196,6 +197,14 @@ export class Game {
       if (figures) {
         this.figures = await figures;
         this.figureMaterial = characterMaterial(this.figures.atlas);
+        // Anime characters are drawn their own way, each from her own atlas; the pack figures share the material above.
+        for (const model of this.figures.models.values()) {
+          if (!model.texture) continue;
+          const cel = celMaterials(model.texture);
+          model.material = cel.body;
+          model.outline = cel.outline;
+          model.face = cel.face;
+        }
       }
       if (this.figures && this.figureMaterial && !skip.has('npcs')) {
         this.npcs = new Npcs(this.scene, this.figures, this.figureMaterial, this.terrain, this.physics, this.clock.isNight);
@@ -293,7 +302,9 @@ export class Game {
     this.last = performance.now();
     const tick = (now: number) => {
       requestAnimationFrame(tick);
-      const frameMs = now - this.last;
+      // The first frame's timestamp can be earlier than the moment the loop was started (the page was busy
+      // loading): time never runs backwards here, or gravity would throw the player into the air.
+      const frameMs = Math.max(0, now - this.last);
       this.last = now;
       const dt = Math.min(frameMs / 1000, 0.05);
       const t0 = performance.now();

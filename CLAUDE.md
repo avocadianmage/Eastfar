@@ -2,7 +2,7 @@
 
 Browser game: 3D first-person fantasy adventure. Three.js (`three/webgpu` + TSL node materials, WebGL2 fallback), TypeScript, Vite, Rapier physics. The approved design and milestone plan is `docs/DESIGN.md`; follow it and keep it current when decisions change.
 
-**Current work: the anime cast.** Every villager is to be replaced by an anime-style character made in VRoid Studio on the owner's computer. Nothing of it is built yet. Read `docs/ANIME-CAST.md` before doing anything on characters: it is the handoff, with the decisions, pixiv's licence conditions, the cast and the plan.
+**The anime cast.** Every villager is an anime-style character made in VRoid Studio on the owner's computer (`art/vroid/<id>.vroid` and `.vrm`, git-ignored, on the owner's computer only, backed up by the owner) and built into the game by `tools/assets/build-vrm.mjs`. The owner approved the cast. Read `docs/ANIME-CAST.md` before doing anything on characters: it is the handoff, with the decisions, pixiv's licence conditions, the cast and how each was made, and what was learned about driving VRoid Studio. `art/vroid/GAME-SIDE-NOTES.md` holds what the game side needs from the VRoid side.
 
 ## Commands
 
@@ -13,8 +13,10 @@ Browser game: 3D first-person fantasy adventure. Three.js (`three/webgpu` + TSL 
 - `node tools/probe.mjs "js expression" "query"` — evaluate JavaScript inside the running game (debug hooks are on `window.__eastfar`). It runs at low quality with the grass left out unless the query says otherwise: for triangle or draw-call counts pass `quality=high&skip=none`
 - `npm run assets:fetch` / `npm run assets:build` — download the source packs into `.cache/packs/` (git-ignored; needs network, and `NODE_USE_ENV_PROXY=1` in this sandbox) and rebuild `public/assets/` from `tools/assets/recipes.mjs`
 - `npm run assets:preview -- name="model=elder&clip=Idle_Loop&t=1&views=full:0,face:30"` — screenshots of a built character in a bare viewer, into `shots/assets/`
+- `node tools/assets/preview.mjs --viewer=vrm --out=shots/vroid name="file=herbalist&arms=68&views=full:0,full:90,full:180,face:30,legs:0"` — the same for a raw VRM exported from VRoid Studio (`art/vroid/<file>.vrm`), from any side
+- `node tools/assets/paint-vroid.mjs [character]` — paint the clothing textures that are imported into VRoid Studio (reads and writes `art/vroid/textures/`)
 - `node tools/live.mjs` — load the published site in a headless browser and report failed requests and console errors
-- `node tools/shots.mjs name="time=12:00&pos=x,z&yaw=deg" [--webgpu] [--size=1280x720]` — deterministic screenshots into `shots/` (run `npm run build` first)
+- `node tools/shots.mjs name="time=12:00&pos=x,z&yaw=deg" [--webgpu] [--gpu] [--size=1280x720]` — deterministic screenshots into `shots/` (run `npm run build` first). `--gpu` draws with the computer's own graphics card instead of the software renderer: much faster, and on Windows the only way headless Chromium offers WebGPU (without it `--webgpu` quietly falls back to WebGL2 there)
 
 ## Conventions
 
@@ -34,4 +36,4 @@ The game was built in a cloud sandbox with no GPU, and the tools are set up for 
 
 ## Git
 
-Work is pushed to `main`; each push deploys to GitHub Pages via `.github/workflows/deploy.yml`. The anime cast is the exception: keep it on a branch until the owner has approved the look, so a half-changed cast never goes live.
+Work is pushed to `main`; each push deploys to GitHub Pages via `.github/workflows/deploy.yml`. A large change to how the characters look (a new cast member, a different style) goes on a branch until the owner has seen it.

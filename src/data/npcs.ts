@@ -5,15 +5,17 @@
  * data/quests.ts, keyed by the ids here.
  */
 export interface NpcLook {
-  /** Character model id (public/assets/characters/<model>.glb, made by tools/assets/build.mjs). */
+  /** Character model id (public/assets/characters/<model>.glb, made by tools/assets/build.mjs or build-vrm.mjs). */
   model: string;
-  /** Height multiplier (children are small). */
+  /** Height multiplier (children are small). Pack figures only: an anime character is modelled at her own height. */
   height?: number;
-  /** Width multiplier: slight or stocky. */
+  /** Width multiplier: slight or stocky. Pack figures only. */
   build?: number;
+  /** For an anime character: the height she stands in the game, metres; the whole figure is scaled to it. Left out, she stands as modelled. */
+  stature?: number;
   /** Clip played when standing about. */
   idle?: string;
-  /** Head size multiplier: children's heads are large for their bodies. */
+  /** Head size multiplier: children's heads are large for their bodies. Pack figures only. */
   head?: number;
 }
 
@@ -59,7 +61,7 @@ export const NPCS: readonly NpcDef[] = [
   },
   {
     id: 'beekeeper',
-    name: 'Orsolt',
+    name: 'Orla',
     title: 'Beekeeper',
     home: 'beekeeper',
     day: { x: 14.6, z: -58.2, yaw: 300 },
@@ -89,7 +91,7 @@ export const NPCS: readonly NpcDef[] = [
   },
   {
     id: 'blacksmith',
-    name: 'Bram',
+    name: 'Brenna',
     title: 'Blacksmith',
     home: 'smithy',
     day: { x: 34, z: -14.6, yaw: 180 },
@@ -126,17 +128,17 @@ export const NPCS: readonly NpcDef[] = [
     home: 'home_west',
     day: { x: -3.2, z: 6.4, yaw: 20 },
     night: { x: 0.6, z: 0.8, yaw: 180 },
-    look: { model: 'child', height: 0.7, build: 0.95, head: 1.16 },
+    look: { model: 'child', height: 0.7, build: 0.95, head: 1.16, stature: 1.16 },
     lines: [
       'I saw the stone man in the meadow! He has moss for hair. You have to go past the bent trees.',
-      'Bram says there are wolves past the farms. Hesta says there are not. Bram has a sword, so.',
+      'Brenna says there are wolves past the farms. Hesta says there are not. Brenna has a sword, so.',
       'Are you going east? Everybody says nobody goes east. So somebody should.',
     ],
     nightLines: ['I am not sleepy. I am just resting my eyes standing up.'],
   },
   {
     id: 'farmer_dorrin',
-    name: 'Dorrin Haywell',
+    name: 'Dorrie Haywell',
     title: 'Farmer',
     home: 'haywell',
     day: { x: 436.5, z: 9.5, yaw: 160 },

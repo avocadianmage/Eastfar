@@ -113,7 +113,7 @@ Copyright © 2026 the Eastfar authors.
 **The art and sound** in `public/assets/` are not covered by the GPL. Each file is listed with its own terms in [public/assets/CREDITS.md](public/assets/CREDITS.md):
 
 - Everything there today is public domain (CC0 1.0): it is built from CC0 packs and recordings, and the changes made to them here are released under CC0 as well.
-- Characters made with [VRoid Studio](https://vroid.com/en/studio), when they arrive, are **not** CC0 and **not** GPL. They contain meshes and textures that belong to pixiv Inc. and are used under pixiv's conditions (the [VRoid Studio Guidelines](https://vroid.com/en/studio/guidelines) and the [sample models' conditions of use](https://vroid.pixiv.help/hc/en-us/articles/4402394424089)). You may use, change and share those files free of charge under the same conditions; you may not release them as CC0, sell the model files, or use their data to build a character-creation tool.
+- The villagers, made with [VRoid Studio](https://vroid.com/en/studio), are **not** CC0 and **not** GPL. They contain meshes and textures that belong to pixiv Inc. and are used under pixiv's conditions (the [VRoid Studio Guidelines](https://vroid.com/en/studio/guidelines) and the [sample models' conditions of use](https://vroid.pixiv.help/hc/en-us/articles/4402394424089)). You may use, change and share those files free of charge under the same conditions; you may not release them as CC0, sell the model files, or use their data to build a character-creation tool.
 
 The terrain, plants, buildings, sky, water, birdsong, wind and music are made by the code as the game runs.
 
