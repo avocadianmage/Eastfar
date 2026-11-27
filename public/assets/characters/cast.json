@@ -8,5 +8,6 @@
     "farmer_marta",
     "herbalist",
     "innkeeper"
-  ]
+  ],
+  "arm": "farmer_dorrin"
 }

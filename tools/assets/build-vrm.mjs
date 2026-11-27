@@ -13,7 +13,10 @@
  *   anims_vroid.glb   the villagers' animation clips, carried over from anims_female.glb.
  *                     One file serves every VRoid body: the bones have no rest rotation, and the
  *                     hips' travel is stored per metre of hip height.
- *   cast.json         which villagers are VRoid characters (the game asks before loading)
+ *   arms_vroid.glb    the player's right forearm and hand, cut from one character (ARM_SOURCE)
+ *                     and posed as a fist and a grip, with its own atlas arms_vroid.webp
+ *   cast.json         which villagers are VRoid characters, and whose arm the player has
+ *                     (the game asks before loading)
  *
  * A villager with no .vrm keeps the model made by build.mjs. Nothing here depends on one
  * file's meshes, materials or bone counts.
@@ -1231,6 +1234,154 @@ async function buildCharacter(id) {
   return { id, sk, bytes: bytes + atlas.bytes };
 }
 
+// ---------------------------------------------------------------- the player's arm
+
+/** Whose right forearm and hand the player sees: a plain cream shirt sleeve and a bare hand. */
+const ARM_SOURCE = 'farmer_dorrin';
+/** The bones whose weight makes a vertex part of that forearm. */
+const ARM_BONES = /^right(LowerArm|Hand|Thumb|Index|Middle|Ring|Little)/;
+/**
+ * How far each finger joint is bent, degrees: closed in a fist, and round a handle. VRoid's T-pose has the
+ * right hand pointing along -x, palm down, the thumb lying alongside the first finger on the +z side; the
+ * fingers close by turning about +z. Each thumb joint turns [about +y, about +z]: in a fist it swings across
+ * the front of the curled fingers (toward -z), round a handle it closes down over them.
+ */
+const HAND_POSES = {
+  fist: { Proximal: 88, Intermediate: 100, Distal: 70, thumb: [[-35, 30], [-45, 10], [-35, 0]] },
+  grip: { Proximal: 72, Intermediate: 78, Distal: 48, thumb: [[-15, 45], [-10, 35], [0, 35]] },
+};
+
+const axisAngle = (axis, radians) => {
+  const [x, y, z] = unit(axis);
+  const s = Math.sin(radians / 2);
+  return [x * s, y * s, z * s, Math.cos(radians / 2)];
+};
+/** Column-major matrix of a translation and a rotation. */
+function compose(t, q) {
+  const [x, y, z, w] = q;
+  return [1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * (x * z - y * w), 0, 2 * (x * y - z * w), 1 - 2 * (x * x + z * z), 2 * (y * z + x * w), 0, 2 * (x * z + y * w), 2 * (y * z - x * w), 1 - 2 * (x * x + y * y), 0, t[0], t[1], t[2], 1];
+}
+
+/**
+ * The player's right forearm and hand, cut from a VRoid character (ARM_SOURCE) and drawn like the
+ * villagers: posed once as a fist and once closed round a handle (the fingers bent at their joints;
+ * the T-pose arm is otherwise as modelled), turned so the forearm runs back along +z from the wrist at
+ * the origin, with the knuckles level in the fist and the handle upright in the grip, as the game's
+ * first-person view expects. Not skinned: the game moves it as a whole. Writes arms_vroid.glb and its
+ * own small atlas, arms_vroid.webp.
+ */
+async function buildArm(id) {
+  const vrm = await readVrm(join(SOURCES, `${id}.vrm`));
+  const sk = tidySkeleton(vrm);
+  const all = await gather(vrm, sk);
+  const { groups } = all;
+  const { g } = await dropCovered(vrm, sk, all.g, groups);
+  const onArm = sk.names.map((n) => ARM_BONES.test(n));
+  const kept = new Uint8Array(g.vertexCount);
+  for (let v = 0; v < g.vertexCount; v++) {
+    let share = 0;
+    for (let k = 0; k < 4; k++) if (onArm[g.joints[v * 4 + k]]) share += g.weights[v * 4 + k];
+    kept[v] = share >= 0.5 ? 1 : 0;
+  }
+  const tri = [];
+  for (let t = 0; t < g.indices.length; t += 3) if (kept[g.indices[t]] && kept[g.indices[t + 1]] && kept[g.indices[t + 2]]) tri.push(g.indices[t], g.indices[t + 1], g.indices[t + 2]);
+  if (!tri.length) throw new Error(id + ' has no right forearm');
+  const arm = g.subset(tri);
+  const atlas = await buildAtlas(vrm, arm, groups, join(OUT, 'arms_vroid.webp'));
+
+  const bone = (name) => sk.names.indexOf(name);
+  const doc = new Document();
+  doc.setLogger(new Logger(Logger.Verbosity.SILENT));
+  doc.getRoot().getAsset().copyright = "Made in VRoid Studio; used under pixiv's conditions. Not CC0 and not under the GPL: see CREDITS.md.";
+  const buffer = doc.createBuffer();
+  const material = doc.createMaterial('character');
+  const scene = doc.createScene('arms');
+  const extras = { kind: 'vroid', from: id };
+  for (const [name, bend] of Object.entries(HAND_POSES)) {
+    const rot = sk.names.map(() => [0, 0, 0, 1]);
+    // In the T-pose the right hand points along -x with its palm down; a finger closes by turning about +z.
+    for (const finger of ['Index', 'Middle', 'Ring', 'Little']) {
+      for (const part of ['Proximal', 'Intermediate', 'Distal']) {
+        const b = bone('right' + finger + part);
+        if (b >= 0) rot[b] = axisAngle([0, 0, 1], (bend[part] * Math.PI) / 180);
+      }
+    }
+    ['rightThumbMetacarpal', 'rightThumbProximal', 'rightThumbDistal'].forEach((n, k) => {
+      const b = bone(n);
+      if (b < 0) return;
+      const [aboutY, aboutZ] = bend.thumb[k].map((d) => (d * Math.PI) / 180);
+      rot[b] = qmul(axisAngle([0, 1, 0], aboutY), axisAngle([0, 0, 1], aboutZ));
+    });
+    const world = [];
+    for (let j = 0; j < sk.names.length; j++) {
+      const local = compose(sk.translation[j], rot[j]);
+      world.push(sk.parents[j] < 0 ? local : mulMat(world[sk.parents[j]], local));
+    }
+    const skin = world.map((m, j) => mulMat(m, Array.from(sk.inverseBind.subarray(j * 16, j * 16 + 16))));
+    const at = (n) => applyPoint(world[bone(n)], [0, 0, 0]);
+    const wrist = at('rightHand');
+    const forward = unit(sub(wrist, at('rightLowerArm')));
+    let knuckles = sub(at('rightIndexProximal'), at('rightLittleProximal'));
+    knuckles = unit(sub(knuckles, forward.map((v) => v * dot3(knuckles, forward))));
+    const Z = forward.map((v) => -v);
+    let X;
+    let Y;
+    if (name === 'fist') {
+      X = knuckles.map((v) => -v);
+      Y = cross3(Z, X);
+    } else {
+      Y = knuckles;
+      X = cross3(Y, Z);
+    }
+    const toFrame = (p) => {
+      const d = sub(p, wrist);
+      return [dot3(d, X), dot3(d, Y), dot3(d, Z)];
+    };
+    const position = [];
+    const normal = [];
+    for (let v = 0; v < arm.vertexCount; v++) {
+      const p = arm.position.slice(v * 3, v * 3 + 3);
+      const n = arm.normal.slice(v * 3, v * 3 + 3);
+      const outP = [0, 0, 0];
+      const outN = [0, 0, 0];
+      for (let k = 0; k < 4; k++) {
+        const w = arm.weights[v * 4 + k];
+        if (!w) continue;
+        const sp = applyPoint(skin[arm.joints[v * 4 + k]], p);
+        const sn = applyDir(skin[arm.joints[v * 4 + k]], n);
+        for (let a = 0; a < 3; a++) {
+          outP[a] += sp[a] * w;
+          outN[a] += sn[a] * w;
+        }
+      }
+      position.push(...toFrame(outP));
+      normal.push(...unit([dot3(outN, X), dot3(outN, Y), dot3(outN, Z)]));
+    }
+    const acc = (type, array, normalized = false) => doc.createAccessor().setType(type).setArray(array).setNormalized(normalized).setBuffer(buffer);
+    const prim = doc
+      .createPrimitive()
+      .setMaterial(material)
+      .setIndices(acc('SCALAR', Uint16Array.from(arm.indices)))
+      .setAttribute('POSITION', acc('VEC3', Float32Array.from(position)))
+      .setAttribute('NORMAL', acc('VEC3', Float32Array.from(normal)))
+      .setAttribute('TEXCOORD_0', acc('VEC2', Float32Array.from(arm.uv)))
+      .setAttribute('TEXCOORD_1', acc('VEC2', Float32Array.from(arm.line)))
+      .setAttribute('COLOR_0', acc('VEC4', Uint8Array.from(arm.shade), true));
+    scene.addChild(doc.createNode(name).setMesh(doc.createMesh(name).addPrimitive(prim)));
+    if (name === 'grip') {
+      // The middle of the closed hand, where a handle passes through it.
+      const mids = ['rightIndexIntermediate', 'rightMiddleIntermediate', 'rightRingIntermediate', 'rightLittleIntermediate', 'rightIndexProximal', 'rightLittleProximal', 'rightThumbProximal'].filter((n) => bone(n) >= 0).map((n) => toFrame(at(n)));
+      extras.grip = [0, 1, 2].map((a) => round(mids.reduce((sum, m) => sum + m[a], 0) / mids.length));
+    }
+  }
+  scene.setExtras(extras);
+  await doc.transform(quantize({ quantizePosition: 14, quantizeNormal: 10, quantizeTexcoord: 14, quantizeColor: 8 }), meshopt({ encoder: MeshoptEncoder, level: 'medium' }));
+  const file = join(OUT, 'arms_vroid.glb');
+  await io.write(file, doc);
+  console.log('arms_vroid.glb: ' + id + "'s right forearm, " + arm.indices.length / 3 + ' triangles in two poses, grip at ' + extras.grip.join(', ') + '; atlas ' + atlas.width + 'x' + atlas.height + ' ' + (atlas.bytes / 1000).toFixed(0) + ' kB');
+  return (await stat(file)).size + atlas.bytes;
+}
+
 // ---------------------------------------------------------------- animation
 
 /**
@@ -1412,7 +1563,18 @@ for (const id of found) {
   }
 }
 const cast = [...new Set([...kept, ...built])].sort();
-await writeFile(castFile, `${JSON.stringify({ vroid: cast }, null, 2)}\n`);
+// The player's arm comes from one of them, when its source is here (otherwise it stays as last built).
+let arm = existsSync(join(OUT, 'arms_vroid.glb')) ? ARM_SOURCE : null;
+if (found.includes(ARM_SOURCE) && (!only || only.includes(ARM_SOURCE))) {
+  try {
+    total += await buildArm(ARM_SOURCE);
+    arm = ARM_SOURCE;
+  } catch (e) {
+    console.error('! the arm: ' + e.message);
+    process.exitCode = 1;
+  }
+}
+await writeFile(castFile, `${JSON.stringify({ vroid: cast, ...(arm ? { arm } : {}) }, null, 2)}\n`);
 // A villager who is no longer a VRoid character needs their atlas no more.
 for (const id of before) if (!cast.includes(id)) await rm(join(OUT, `${id}.webp`), { force: true });
 

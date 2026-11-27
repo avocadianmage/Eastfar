@@ -299,6 +299,7 @@ function floats(attr: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, 
     out[i * size] = attr.getX(i);
     if (size > 1) out[i * size + 1] = attr.getY(i);
     if (size > 2) out[i * size + 2] = attr.getZ(i);
+    if (size > 3) out[i * size + 3] = attr.getW(i);
   }
   return new THREE.Float32BufferAttribute(out, size);
 }
@@ -342,11 +343,28 @@ export interface ArmAssets {
   grip: THREE.BufferGeometry;
   /** The middle of the closed hand, where a handle passes through it. */
   gripAt: THREE.Vector3;
+  /**
+   * For an arm cut from a VRoid character, its own colour atlas: it is then drawn with that character's
+   * cel material, and its geometry carries the toon settings (`color` with four parts, `uv1`).
+   */
+  texture?: THREE.Texture;
 }
 
-/** The player's own arm (made with the characters by tools/assets/build.mjs; textured from the character atlas). */
+/**
+ * The player's own arm: cut from a VRoid character by tools/assets/build-vrm.mjs when characters/cast.json
+ * names one (`arm`), otherwise the pack figures' arm made by tools/assets/build.mjs, textured from their atlas.
+ */
 export async function loadArmAssets(): Promise<ArmAssets> {
-  const file = await gltfLoader().loadAsync(assetUrl('characters/arms.glb'));
+  let vroid = false;
+  try {
+    vroid = !!((await (await fetch(assetUrl('characters/cast.json'))).json()) as { arm?: string }).arm;
+  } catch {
+    // No list: the pack figures' arm.
+  }
+  const [file, texture] = await Promise.all([
+    gltfLoader().loadAsync(assetUrl(vroid ? 'characters/arms_vroid.glb' : 'characters/arms.glb')),
+    vroid ? new THREE.TextureLoader().loadAsync(assetUrl('characters/arms_vroid.webp')) : null,
+  ]);
   file.scene.updateMatrixWorld(true);
   const found = new Map<string, THREE.BufferGeometry>();
   file.scene.traverse((o) => {
@@ -357,12 +375,15 @@ export async function loadArmAssets(): Promise<ArmAssets> {
     geometry.setAttribute('position', floats(src.getAttribute('position'), 3));
     geometry.setAttribute('normal', floats(src.getAttribute('normal'), 3));
     geometry.setAttribute('uv', floats(src.getAttribute('uv'), 2));
-    geometry.setAttribute('color', floats(src.getAttribute('color'), 3));
+    const colour = src.getAttribute('color');
+    geometry.setAttribute('color', floats(colour, vroid ? colour.itemSize : 3));
+    const line = src.getAttribute('uv1');
+    if (line) geometry.setAttribute('uv1', floats(line, 2));
     geometry.setIndex(src.getIndex());
     geometry.applyMatrix4(mesh.matrixWorld);
     const name = mesh.name === 'fist' || mesh.name === 'grip' ? mesh.name : (mesh.parent?.name ?? '');
     found.set(name, geometry);
   });
   const grip = (file.scene.userData.grip ?? [0, 0, -0.1]) as [number, number, number];
-  return { fist: found.get('fist')!, grip: found.get('grip')!, gripAt: new THREE.Vector3(...grip) };
+  return { fist: found.get('fist')!, grip: found.get('grip')!, gripAt: new THREE.Vector3(...grip), ...(texture ? { texture: colourTexture(texture) } : {}) };
 }

@@ -714,35 +714,97 @@ async function elder() {
 }
 
 /**
- * Pip, the weaver's child: the pale pink dress preset made sky blue and modest. The preset is
- * strapless with off-shoulder puffs, the rest of its bodice and sleeves left transparent; here
- * those pieces are filled in, which gives a round neckline and short puffed sleeves (the mesh is
- * all there). The white lace at the front and the roses along the hem stay white. White tights
- * under it (the same Socks preset as Maelin's, painted over flat).
+ * Pip, the weaver's child: a cream shirt with sky-blue stripes (the white long-sleeved shirt
+ * preset, as Brenna's) under denim overalls, and denim trousers (the "Pants (No Crease)" preset)
+ * with a heart patched on one knee. The overalls are painted on the shirt by position on her body,
+ * read from a draft export of her (art/vroid/textures/child-draft.vrm): a bib with a stitched
+ * pocket and brass buttons, straps over the shoulders that cross at the back, and everything below
+ * the waist. Her proportions are a child's (head about a sixth of her height); in the T-pose her
+ * hips are at 0.48 m, the waist band at 0.50 m, the shoulders at 0.76 m and the wrists 0.33 m out.
  */
 async function child() {
-  const dress = await load('pinkdress-default.png');
-  const piece = await islands('pinkdress-guide.png');
-  const filled = new Set([piece(1024, 800), piece(256, 420), piece(1792, 420)]);
-  const cloth = hex('#F2DCDD'); // the preset's pink, so the fill shades like the rest
-  each(dress, (x, y, o) => {
-    const d = dress.data;
-    if (!filled.has(piece(x, y)) || d[o + 3] === 255) return;
-    const a = d[o + 3] / 255;
-    d.set(mix(cloth, [d[o], d[o + 1], d[o + 2]], a).map(Math.round), o);
-    d[o + 3] = 255;
-  });
-  const lace = (x, y, r, g, b) => luma(r, g, b) > 0.93 && saturation(r, g, b) < 0.07;
-  ramp(dress, { base: '#A6D6F2', shade: '#3F78A8', low: 0.55, high: 0.93, gamma: 1.1, where: (...a) => !lace(...a) });
-  await save(dress, 'child', 'dress.png');
+  const draft = 'art/vroid/textures/child-draft.vrm';
+  const WAIST = 0.5;
+  const BIB_TOP = 0.655;
+  const SHOULDER = 0.765;
+  const WRIST = 0.326;
+  const NECK = 0.755;
+  const [cream, creamShade, sky, skyShade] = ['#FFF8EE', '#C8BBA8', '#86BDE9', '#4F7FAE'].map(hex);
+  const [denim, denimShade, stitch, brass, brassDark] = ['#5B83BD', '#26406D', '#F0C35A', '#E6C466', '#8A6A24'].map(hex);
+  const lerp = (a, b, t) => a + (b - a) * clamp01(t);
+  const dashed = (x, y) => Math.sin((x + y) * 900) > -0.25;
+  // Distance from (px, py) to the segment (ax, ay)-(bx, by).
+  const toSegment = (px, py, ax, ay, bx, by) => {
+    const t = clamp01(((px - ax) * (bx - ax) + (py - ay) * (by - ay)) / ((bx - ax) ** 2 + (by - ay) ** 2));
+    return Math.hypot(px - ax - t * (bx - ax), py - ay - t * (by - ay));
+  };
 
-  const tights = await load('tights-default.png');
-  each(tights, (x, y, o) => {
-    if (tights.data[o + 3] === 0) return;
-    const t = clamp01(luma(tights.data[o], tights.data[o + 1], tights.data[o + 2]) / 0.35);
-    tights.data.set(mix(hex('#CFCAC2'), hex('#F6F3EC'), 0.6 + 0.4 * t).map(Math.round), o);
+  const shirt = await load('workshirt-default.png');
+  const body = await surface(draft, 'Tops_01_CLOTH', shirt.width, shirt.height);
+  each(shirt, (tx, ty, o) => {
+    const d = shirt.data;
+    const p = ty * body.width + tx;
+    if (d[o + 3] === 0 || !body.covered[p]) return;
+    const sx = body.x[p];
+    const x = Math.abs(sx);
+    const y = body.y[p];
+    const front = body.nz[p] > 0 && body.z[p] > -0.02;
+    const shade = 0.35 + 0.65 * clamp01((luma(d[o], d[o + 1], d[o + 2]) - 0.8) / 0.2);
+    // How far inside the overalls this point is (metres); negative outside.
+    let inside = -1;
+    if (x < 0.12) {
+      if (y < WAIST) inside = WAIST - y + 0.02; // the hips and seat: overalls all round
+      if (front && y >= WAIST && y <= BIB_TOP) inside = Math.max(inside, Math.min(lerp(0.075, 0.062, (y - WAIST) / (BIB_TOP - WAIST)) - x, BIB_TOP - y, y - WAIST + 0.02));
+      if (front && y > BIB_TOP && y < SHOULDER + 0.01) inside = Math.max(inside, 0.011 - Math.abs(x - lerp(0.052, 0.07, (y - BIB_TOP) / (SHOULDER - BIB_TOP))));
+      if (y >= SHOULDER - 0.03) inside = Math.max(inside, 0.011 - Math.abs(x - 0.07)); // over the shoulder
+      if (!front && y >= WAIST - 0.01) {
+        // At the back each strap runs from its shoulder down to the other side of the waist.
+        const cross = Math.min(toSegment(sx, y, 0.07, SHOULDER, -0.055, WAIST), toSegment(sx, y, -0.07, SHOULDER, 0.055, WAIST));
+        inside = Math.max(inside, 0.011 - cross);
+      }
+    }
+    let c;
+    if (inside >= 0) {
+      c = mix(denimShade, denim, shade);
+      if (inside > 0.003 && inside < 0.0045 && dashed(sx, y)) c = mix(c, stitch, 0.85);
+      // A pocket on the bib, and a brass button where each strap meets it.
+      if (front && y > WAIST + 0.06 && y < WAIST + 0.105 && x < 0.03) {
+        const edge = Math.min(0.03 - x, y - (WAIST + 0.06), WAIST + 0.105 - y);
+        if (edge < 0.0035 && edge > 0.002 && dashed(sx, y)) c = mix(c, stitch, 0.85);
+      }
+      const button = Math.hypot(x - 0.054, y - (BIB_TOP - 0.006));
+      if (front && button < 0.0075) c = mix(brassDark, brass, button < 0.005 ? shade : 0.2);
+    } else {
+      // Stripes go round the body, and round each arm along the sleeves; plain at the collar and cuffs.
+      const plain = (x < 0.105 && y > NECK - 0.012) || x > WRIST - 0.035;
+      const phase = x > 0.105 ? x : y;
+      const stripe = !plain && ((phase * 1000) % 30 + 30) % 30 < 10;
+      c = stripe ? mix(skyShade, sky, shade) : mix(creamShade, cream, shade);
+    }
+    d.set(c.map(Math.round), o);
   });
-  await save(tights, 'child', 'tights.png');
+  await save(shirt, 'child', 'shirt.png');
+
+  const trousers = await load('trousers-default.png');
+  const legs = await surface(draft, 'Bottoms_01_CLOTH', trousers.width, trousers.height);
+  const [heart, heartShade] = ['#EE7E96', '#A8405A'].map(hex);
+  each(trousers, (tx, ty, o) => {
+    const d = trousers.data;
+    if (d[o + 3] === 0) return;
+    const p = Math.floor((ty * legs.height) / trousers.height) * legs.width + Math.floor((tx * legs.width) / trousers.width);
+    const shade = clamp01((luma(d[o], d[o + 1], d[o + 2]) - 0.38) / 0.15);
+    let c = mix(denimShade, denim, 0.3 + 0.7 * shade);
+    if (legs.covered[p] && legs.nz[p] > 0.2) {
+      // A heart patched on her left knee.
+      const u = (legs.x[p] - 0.052) / 0.021;
+      const v = (legs.y[p] - 0.272) / 0.021;
+      const inHeart = (k) => ((u / k) ** 2 + (v / k) ** 2 - 1) ** 3 - (u / k) ** 2 * (v / k) ** 3 <= 0;
+      if (inHeart(1)) c = mix(heartShade, heart, 0.45 + 0.55 * shade);
+      else if (inHeart(1.18) && dashed(legs.x[p], legs.y[p])) c = mix(c, stitch, 0.8);
+    }
+    d.set(c.map(Math.round), o);
+  });
+  await save(trousers, 'child', 'trousers.png');
 }
 
 const CHARACTERS = {

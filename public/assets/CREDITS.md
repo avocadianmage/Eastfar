@@ -21,10 +21,11 @@ You may share these files free of charge with the game. You may not mark them or
 | `beekeeper.glb`, `beekeeper.webp` | Orla | Base body and face set; braid hair set's fringe with long hair braided at the ends; cable-knit turtleneck, tank top worn as an undershirt, trousers, long gloves (recoloured), hat (straw texture painted by code), lace-up boots | the Eastfar authors | as above |
 | `blacksmith.glb`, `blacksmith.webp` | Brenna | Base body and face set; long high twin-tail hair set; long-sleeved shirt and trousers with a leather apron painted on, long gloves, lace-up boots (recoloured) | the Eastfar authors | as above |
 | `elder.glb`, `elder.webp` | Maelin | Base body and face set; long straight hair with a parted fringe; hooded capelet (Hoodie template), long dress, long gloves worn as sleeves, tights, lace-up boots (recoloured) | the Eastfar authors | as above |
-| `child.glb`, `child.webp` | Pip | Base body (child's proportions) and face set; long twin-tail hair set with a blunt fringe; short-sleeved dress (the preset's see-through bodice and sleeves filled in), tights, lace-up boots (recoloured) | the Eastfar authors | as above |
+| `child.glb`, `child.webp` | Pip | Base body (child's proportions) and face set; long twin-tail hair set with a blunt fringe; long-sleeved shirt and trousers, with stripes and denim overalls painted on, lace-up boots (recoloured) | the Eastfar authors | as above |
+| `arms_vroid.glb`, `arms_vroid.webp` | (the player's arm) | Dorrie Haywell's right forearm and hand (shirt sleeve, base body), with the fingers posed as a fist and as a grip | the Eastfar authors | as above |
 | `anims_vroid.glb` | (animations) | The packs' animations below (Quaternius, CC0 1.0), carried over to the VRoid skeleton | the Eastfar authors | CC0 1.0 |
 
-Each row's list of items is a summary; the exact presets, colours and settings are recorded with each character in `docs/ANIME-CAST.md` ("How the cast was made"). The scarecrows and the player's arm are still the packs' figures listed in the next section.
+Each row's list of items is a summary; the exact presets, colours and settings are recorded with each character in `docs/ANIME-CAST.md` ("How the cast was made"). The scarecrows are still the packs' figures listed in the next section (drawn with the same cel shading); the packs' arm (`arms.glb`) is kept as the fallback when no VRoid arm is built.
 
 ## Characters and animation (`characters/`)
 

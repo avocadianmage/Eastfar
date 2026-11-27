@@ -142,16 +142,50 @@ export interface CelMaterials {
   face: THREE.NodeMaterial;
 }
 
-/** The pair of materials for one VRoid character, from her own colour atlas. */
+/** What a cel figure is made of, per surface point. */
+interface CelInputs {
+  albedo: Vec3;
+  alpha: Float;
+  /** The colour of the shaded side. */
+  shadeAlbedo: Vec3;
+  /** Where on the turn away from the light the shade begins (-1..1), and how soft that edge is (0..1). */
+  shift: Float;
+  soft: Float;
+  /** Outline width, as a share of OUTLINE_MAX (0 for none). */
+  lineWidth: Float;
+}
+
+/** The materials for one VRoid character, from her own colour atlas and the toon settings on her vertices. */
 export function celMaterials(atlas: THREE.Texture): CelMaterials {
   const texel = texture(atlas, uv());
   const settings = attribute('color', 'vec4') as THREE.Node<'vec4'>;
   const line = uv(1);
   const albedo = texel.rgb as Vec3;
-  const shadeAlbedo = albedo.mul(settings.rgb) as Vec3;
-  // Stored 0..1 for -1..1.
-  const shift = settings.a.mul(2).sub(1) as Float;
-  const soft = max(line.y, 0.02) as Float;
+  return celFrom({
+    albedo,
+    alpha: texel.a as Float,
+    shadeAlbedo: albedo.mul(settings.rgb) as Vec3,
+    // Stored 0..1 for -1..1.
+    shift: settings.a.mul(2).sub(1) as Float,
+    soft: max(line.y, 0.02) as Float,
+    lineWidth: line.x as Float,
+  });
+}
+
+/** The shade a pack figure's colours take: anime shade is a cool, slightly violet darkening, not grey. */
+const PACK_SHADE = vec3(0.62, 0.57, 0.66);
+
+/**
+ * The same look for the figures built from the CC0 packs (the scarecrows now): their colour is the shared
+ * atlas tinted per vertex, and as they carry no toon settings, every surface takes one shade, edge and line.
+ */
+export function celPackMaterials(atlas: THREE.Texture): CelMaterials {
+  const texel = texture(atlas, uv());
+  const albedo = texel.rgb.mul(attribute('color', 'vec3')) as Vec3;
+  return celFrom({ albedo, alpha: float(1), shadeAlbedo: albedo.mul(PACK_SHADE) as Vec3, shift: float(0.1), soft: float(0.12), lineWidth: float(0.6) });
+}
+
+function celFrom({ albedo, alpha, shadeAlbedo, shift, soft, lineWidth }: CelInputs): CelMaterials {
 
   // The lantern hangs at the player's belt.
   const toLantern = env.playerPos.add(vec3(0, 1.1, 0)).sub(positionWorld);
@@ -183,7 +217,7 @@ export function celMaterials(atlas: THREE.Texture): CelMaterials {
       // Where the scene is multisampled, cut-out edges (hair tips, hems) are smoothed.
       m.alphaToCoverage = true;
     }
-    m.colorNode = vec4(albedo, texel.a);
+    m.colorNode = vec4(albedo, alpha);
     m.receivedShadowPositionNode = positionWorld.add(env.lightDir.mul(SHADOW_REACH));
     (m as unknown as { emissiveNode: Vec3 }).emissiveNode = glow;
     return m;
@@ -198,14 +232,14 @@ export function celMaterials(atlas: THREE.Texture): CelMaterials {
   outline.alphaToCoverage = true;
   // Wider with distance, so the line keeps its weight on screen; past OUTLINE_FAR it thins away.
   const distance = length((modelWorldMatrix.mul(vec4(positionLocal, 1)) as THREE.Node<'vec4'>).xyz.sub(env.viewPos));
-  const width = line.x.mul(OUTLINE_MAX * OUTLINE_SCALE).mul(distance.clamp(OUTLINE_NEAR, OUTLINE_FAR));
+  const width = lineWidth.mul(OUTLINE_MAX * OUTLINE_SCALE).mul(distance.clamp(OUTLINE_NEAR, OUTLINE_FAR));
   outline.positionNode = positionLocal.add(normalLocal.normalize().mul(width));
   // Ink takes the light of the place without its direction: sky, sun or moon, lamps, lantern.
   const ambient = env.ambientSky.mul(0.75).add(env.ambientGround.mul(0.25)).add(env.lightColor.mul(0.35)).mul(INV_PI);
   // No line where VRoid gives none (its width texture is black there, as along some hair strands). Drawn at no
   // width, the inside-out copy would lie exactly on the surface, and wherever a strand is seen from its back it
   // would win against the hair itself and paint the strand in ink.
-  outline.colorNode = vec4(shadeAlbedo.mul(INK).mul(ambient.add(flatLamps())), texel.a.mul(step(0.02, line.x)));
+  outline.colorNode = vec4(shadeAlbedo.mul(INK).mul(ambient.add(flatLamps())), alpha.mul(step(0.02, lineWidth)));
 
   return { body, outline, face };
 }

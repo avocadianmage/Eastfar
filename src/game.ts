@@ -30,7 +30,7 @@ import { Grass } from './flora/grass';
 import { Rocks } from './flora/rocks';
 import { TREE_FAR, Trees } from './flora/trees';
 import { placeMoonCaps } from './world/flora';
-import { celMaterials } from './render/celMaterial';
+import { celMaterials, celPackMaterials } from './render/celMaterial';
 import { characterMaterial } from './render/characterMaterial';
 import { propMaterial } from './render/propMaterial';
 import { env } from './render/env';
@@ -197,9 +197,15 @@ export class Game {
       if (figures) {
         this.figures = await figures;
         this.figureMaterial = characterMaterial(this.figures.atlas);
-        // Anime characters are drawn their own way, each from her own atlas; the pack figures share the material above.
+        // Every figure is cel-shaded and outlined: the anime characters each from her own atlas, the figures still
+        // built from the packs (the scarecrows) from their shared one. The plain material above stays the fallback.
+        const pack = celPackMaterials(this.figures.atlas);
         for (const model of this.figures.models.values()) {
-          if (!model.texture) continue;
+          if (!model.texture) {
+            model.material = pack.body;
+            model.outline = pack.outline;
+            continue;
+          }
           const cel = celMaterials(model.texture);
           model.material = cel.body;
           model.outline = cel.outline;
@@ -221,9 +227,11 @@ export class Game {
       // The camera joins the scene so the arm and weapon attached to it are drawn.
       this.scene.add(this.camera);
       if (!skip.has('viewmodel') && this.figureMaterial && armsLoading) {
+        const arms = await armsLoading;
         this.viewmodel = new Viewmodel(this.camera, {
-          arms: await armsLoading,
-          armMaterial: this.figureMaterial,
+          arms,
+          // An arm cut from a VRoid character is drawn as the villagers are.
+          armMaterial: arms.texture ? celMaterials(arms.texture).body : this.figureMaterial,
           sword: propAssets?.props.get('Sword_Bronze') ?? null,
           propMaterial: this.props?.material ?? null,
         });
