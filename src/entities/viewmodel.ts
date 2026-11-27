@@ -121,8 +121,13 @@ function sickle(): THREE.BufferGeometry {
 const SHOULDER = new THREE.Vector3(0.46, -0.52, -0.06);
 /** How far the shoulder comes forward behind a punch or a cut. */
 const LEAN = new THREE.Vector3(-0.06, 0.03, -0.16);
-/** The arm is drawn a little larger than modelled: nearer the eye it reads as the right size, and reaches the shoulder. */
-const ARM_SCALE = 1.3;
+/**
+ * The arm is drawn larger than modelled: so near the eye, life size reads as small and thin. It still reaches the
+ * shoulder, its far end passing behind the eye.
+ */
+const ARM_SCALE = 2.0;
+/** What is held was sized for a hand drawn at 1.3, so it grows with the hand from there and still fits the grip. */
+const HELD_SCALE = ARM_SCALE / 1.3;
 /** Where the hand rests, in the camera's frame. */
 const REST = new THREE.Vector3(0.31, -0.27, -0.5);
 
@@ -180,6 +185,7 @@ export class Viewmodel {
 
     // Things held pass through the closed hand, tipped forward a little as a blade is carried.
     this.held.position.copy(parts.arms.gripAt).multiplyScalar(ARM_SCALE);
+    this.held.scale.setScalar(HELD_SCALE);
     // Tuned when the arm was held at a fixed turn (0.5, 0.5, 0.12 YXZ, under a 0.1 turn to the left): keep what is
     // held at that same angle to the eye now that the arm is aimed at the shoulder instead.
     const before = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -0.1, 0)).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0.5, 0.5, 0.12, 'YXZ')));
