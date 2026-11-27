@@ -29,6 +29,7 @@ import type { TerrainData } from '../world/terrainData';
 import { COBBLE_TILE, cobbleTextures } from './cobbles';
 import { env, lanternLight } from './env';
 import type { Quality } from './quality';
+import { BED_TILE, streamBedTexture } from './streambed';
 import type { WorldTextures } from './textures';
 
 /** A linear-space colour constant from an sRGB hex string. */
@@ -42,6 +43,20 @@ type Vec2Node = THREE.Node<'vec2'>;
 /** Texture coordinates of a world xz position in the baked terrain textures. */
 export function terrainUv(t: TerrainData, xz: Vec2Node) {
   return xz.sub(vec2(t.minX, t.minZ)).div(t.cell).add(0.5).div(t.n);
+}
+
+/**
+ * The colour of the creek's bed at a world position: river stones in sand, with drifts of fine
+ * silt lying over them here and there (which also keeps the stones from visibly repeating).
+ * The ground and the water above it both use this, so the bed seen through the water is the
+ * bed that is there.
+ */
+export function streamBedNode(noise: THREE.Texture, xz: Vec2Node) {
+  const stones = texture(streamBedTexture(), xz.div(BED_TILE)).rgb;
+  const drift = texture(noise, xz.mul(1 / 6.5).add(vec2(0.57, 0.21))).g;
+  const grain = texture(noise, xz.mul(1 / 0.8)).a;
+  const silt = mix(col('#96825c'), col('#c2b08a'), grain);
+  return mix(stones, silt, smoothstep(0.5, 0.64, drift).mul(0.88));
 }
 
 /**
@@ -181,7 +196,7 @@ export class TerrainMesh {
       const earth = mix(col('#6b5540'), col('#8a7355'), blotch);
       const rock = mix(col('#6d6a62'), col('#8f8b7e'), fine);
       const soil = mix(earth, rock, m.g);
-      const bed = mix(col('#4b3f30'), col('#8b8674'), fine.mul(0.8).add(blotch.mul(0.2)));
+      const bed = streamBedNode(tex.noise, xz);
 
       const c = mix(soil, grassCol, smoothstep(0.03, 0.2, m.r)).toVar();
 
