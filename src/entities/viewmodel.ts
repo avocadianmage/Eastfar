@@ -113,9 +113,45 @@ function sickle(): THREE.BufferGeometry {
   return merge([coloured(handle, '#5a4530'), coloured(ferrule, '#8a8a92'), coloured(blade, '#b9bcc4')]);
 }
 
+/**
+ * The arm runs from the hand back to a shoulder below, right of and just in front of the eye, and is aimed
+ * there every frame: as the fist reaches forward the arm swings with it, and its far end (cut at the shoulder)
+ * stays below the bottom of the screen instead of sliding into view.
+ */
+const SHOULDER = new THREE.Vector3(0.46, -0.52, -0.06);
+/** How far the shoulder comes forward behind a punch or a cut. */
+const LEAN = new THREE.Vector3(-0.06, 0.03, -0.16);
+/** The arm is drawn a little larger than modelled: nearer the eye it reads as the right size, and reaches the shoulder. */
+const ARM_SCALE = 1.3;
+/** Where the hand rests, in the camera's frame. */
+const REST = new THREE.Vector3(0.31, -0.27, -0.5);
+
+const shoulderAt = new THREE.Vector3();
+const toShoulder = new THREE.Vector3();
+const across = new THREE.Vector3();
+const upright = new THREE.Vector3();
+const basis = new THREE.Matrix4();
+const roll = new THREE.Quaternion();
+const tilt = new THREE.Quaternion();
+const UP = new THREE.Vector3(0, 1, 0);
+const ALONG = new THREE.Vector3(0, 0, 1);
+const ACROSS = new THREE.Vector3(1, 0, 0);
+
+/** The turn that points an arm's +z (wrist to shoulder) from the hand at `hand` toward `shoulder`, thumb up. */
+function aim(hand: THREE.Vector3, shoulder: THREE.Vector3, out: THREE.Quaternion): THREE.Quaternion {
+  toShoulder.subVectors(shoulder, hand).normalize();
+  across.crossVectors(UP, toShoulder).normalize();
+  upright.crossVectors(toShoulder, across);
+  basis.makeBasis(across, upright, toShoulder);
+  return out.setFromRotationMatrix(basis);
+}
+
 export class Viewmodel {
   readonly root = new THREE.Group();
   private readonly fist: THREE.Mesh;
+  private readonly arm = new THREE.Group();
+  /** How what is held sits in the hand when nothing is swung. */
+  private readonly heldRest = new THREE.Quaternion();
   private readonly grip: THREE.Mesh;
   /** Whatever is held, placed in the closed hand. */
   private readonly held = new THREE.Group();
@@ -134,16 +170,22 @@ export class Viewmodel {
       return mesh;
     };
     // The arm comes up from the lower right: elbow low and out to the side, wrist forward.
-    const arm = new THREE.Group();
-    arm.rotation.set(0.5, 0.5, 0.12, 'YXZ');
+    const arm = this.arm;
     this.fist = make(parts.arms.fist, parts.armMaterial);
     this.grip = make(parts.arms.grip, parts.armMaterial);
+    this.fist.scale.setScalar(ARM_SCALE);
+    this.grip.scale.setScalar(ARM_SCALE);
     arm.add(this.fist, this.grip, this.held);
     this.root.add(arm);
 
     // Things held pass through the closed hand, tipped forward a little as a blade is carried.
-    this.held.position.copy(parts.arms.gripAt);
-    this.held.rotation.set(-1.0, -0.25, 0.3);
+    this.held.position.copy(parts.arms.gripAt).multiplyScalar(ARM_SCALE);
+    // Tuned when the arm was held at a fixed turn (0.5, 0.5, 0.12 YXZ, under a 0.1 turn to the left): keep what is
+    // held at that same angle to the eye now that the arm is aimed at the shoulder instead.
+    const before = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -0.1, 0)).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0.5, 0.5, 0.12, 'YXZ')));
+    const now = aim(REST, SHOULDER, new THREE.Quaternion());
+    this.held.quaternion.copy(now.invert().multiply(before).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-1.0, -0.25, 0.3))));
+    this.heldRest.copy(this.held.quaternion);
     const tools = toolMaterial();
     const add = (id: string, object: THREE.Object3D) => {
       object.visible = false;
@@ -170,7 +212,8 @@ export class Viewmodel {
       add('sword', make(merge([coloured(blade, '#c2c6cc'), coloured(guard, '#8a7a4a')]), tools));
     }
 
-    this.root.position.set(0.27, -0.27, -0.42);
+    this.root.position.copy(REST);
+    aim(REST, SHOULDER, arm.quaternion);
     camera.add(this.root);
   }
 
@@ -192,35 +235,39 @@ export class Viewmodel {
     const sway = Math.sin(time * 7.5) * 0.012 * this.bob;
     const lift = Math.abs(Math.cos(time * 7.5)) * 0.014 * this.bob + Math.sin(time * 1.3) * 0.004;
 
-    let px = 0.31 + sway;
-    let py = -0.27 + lift;
-    let pz = -0.5;
-    let rx = 0;
-    let ry = -0.1;
-    let rz = 0;
+    let px = REST.x + sway;
+    let py = REST.y + lift;
+    let pz = REST.z;
+    // A cut rolls the arm about its own length and tips the blade in the hand; the arm itself stays aimed at
+    // the shoulder, so it never swings round the wrist and shows its far end.
+    let rollBy = 0;
+    let tipBy = 0;
+    let lean = 0;
     if (swing >= 0) {
       // Wind up briefly, strike through, then recover.
       const strike = swing < 0.38 ? swing / 0.38 : 1 - (swing - 0.38) / 0.62;
       const ease = strike * strike * (3 - 2 * strike);
+      lean = ease;
       if (holding) {
         // A cut from the upper right down across to the left.
         const wind = Math.sin(Math.min(1, swing / 0.2) * Math.PI) * (swing < 0.2 ? 1 : 0);
         px += -0.34 * ease + 0.05 * wind;
         py += 0.1 * wind - 0.08 * ease;
         pz -= 0.12 * ease;
-        rx = 0.35 * wind - 0.95 * ease;
-        rz = 0.8 * ease - 0.2 * wind;
-        ry = -0.1 + 0.55 * ease;
+        rollBy = 0.9 * ease - 0.2 * wind;
+        tipBy = 0.35 * wind - 0.85 * ease;
       } else {
-        // A straight punch.
-        px -= 0.14 * ease;
+        // A straight punch toward the middle of the view: the arm reaches out from the shoulder behind it.
+        px -= 0.15 * ease;
         py += 0.1 * ease;
-        pz -= 0.34 * ease;
-        rx = 0.1 * ease;
-        ry = -0.1 + 0.2 * ease;
+        pz -= 0.3 * ease;
       }
     }
     this.root.position.set(px, py, pz);
-    this.root.rotation.set(rx, ry, rz);
+    shoulderAt.copy(SHOULDER).addScaledVector(LEAN, lean);
+    aim(this.root.position, shoulderAt, this.arm.quaternion);
+    if (rollBy) this.arm.quaternion.multiply(roll.setFromAxisAngle(ALONG, rollBy));
+    this.held.quaternion.copy(this.heldRest);
+    if (tipBy) this.held.quaternion.premultiply(tilt.setFromAxisAngle(ACROSS, tipBy));
   }
 }

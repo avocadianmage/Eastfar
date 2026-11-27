@@ -888,8 +888,11 @@ function bleed(data, w, h, passes) {
   }
 }
 
-/** Pack the patches of texture the character uses into one image; points every vertex's coordinates into it. */
-async function buildAtlas(vrm, g, groups, file) {
+/**
+ * Pack the patches of texture the character uses into one image; points every vertex's coordinates into it.
+ * `recolour(group, rgba, width, height)`, if given, may repaint a group's image (a copy) before it is packed.
+ */
+async function buildAtlas(vrm, g, groups, file, recolour = null) {
   for (const group of groups) group.used = false;
   // Patches in use, per group.
   const byGroup = groups.map(() => []);
@@ -927,6 +930,7 @@ async function buildAtlas(vrm, g, groups, file) {
       width *= rx;
       height *= ry;
     }
+    if (recolour) data = recolour(group, Buffer.from(data), width, height) ?? data;
     sources.push({ group, data, width, height, rx, ry });
   }
 
@@ -1236,10 +1240,15 @@ async function buildCharacter(id) {
 
 // ---------------------------------------------------------------- the player's arm
 
-/** Whose right forearm and hand the player sees: a plain cream shirt sleeve and a bare hand. */
+/** Whose right arm and hand the player sees: a plain shirt sleeve (recoloured, ARM_SLEEVE) and a bare hand. */
 const ARM_SOURCE = 'farmer_dorrin';
-/** The bones whose weight makes a vertex part of that forearm. */
-const ARM_BONES = /^right(LowerArm|Hand|Thumb|Index|Middle|Ring|Little)/;
+/**
+ * The bones whose weight makes a vertex part of that arm: the whole arm from the shoulder, so that when it
+ * punches forward its far end is still off the screen and it never looks cut off at the elbow.
+ */
+const ARM_BONES = /^right(UpperArm|LowerArm|Hand|Thumb|Index|Middle|Ring|Little)/;
+/** The sleeve's colour (lit and shaded ends), so it does not read as more skin: a dusky blue wool. */
+const ARM_SLEEVE = { base: [0x5a, 0x77, 0x96], shade: [0x26, 0x37, 0x4e] };
 /**
  * How far each finger joint is bent, degrees: closed in a fist, and round a handle. VRoid's T-pose has the
  * right hand pointing along -x, palm down, the thumb lying alongside the first finger on the +z side; the
@@ -1247,7 +1256,7 @@ const ARM_BONES = /^right(LowerArm|Hand|Thumb|Index|Middle|Ring|Little)/;
  * the front of the curled fingers (toward -z), round a handle it closes down over them.
  */
 const HAND_POSES = {
-  fist: { Proximal: 88, Intermediate: 100, Distal: 70, thumb: [[-35, 30], [-45, 10], [-35, 0]] },
+  fist: { Proximal: 88, Intermediate: 100, Distal: 70, thumb: [[20, 35], [-40, -10], [-50, -10]] },
   grip: { Proximal: 72, Intermediate: 78, Distal: 48, thumb: [[-15, 45], [-10, 35], [0, 35]] },
 };
 
@@ -1287,7 +1296,19 @@ async function buildArm(id) {
   for (let t = 0; t < g.indices.length; t += 3) if (kept[g.indices[t]] && kept[g.indices[t + 1]] && kept[g.indices[t + 2]]) tri.push(g.indices[t], g.indices[t + 1], g.indices[t + 2]);
   if (!tri.length) throw new Error(id + ' has no right forearm');
   const arm = g.subset(tri);
-  const atlas = await buildAtlas(vrm, arm, groups, join(OUT, 'arms_vroid.webp'));
+  // The sleeve's pale cloth takes ARM_SLEEVE, keeping its folds; leather bands, buttons and the skin stay.
+  const sleeve = (group, data, width, height) => {
+    if (group.kind !== 'cloth') return null;
+    for (let i = 0; i < width * height; i++) {
+      const o = i * 4;
+      const l = (0.299 * data[o] + 0.587 * data[o + 1] + 0.114 * data[o + 2]) / 255;
+      if (l < 0.5) continue;
+      const t = Math.min(1, Math.max(0, (l - 0.55) / 0.4));
+      for (let c = 0; c < 3; c++) data[o + c] = Math.round(ARM_SLEEVE.shade[c] + (ARM_SLEEVE.base[c] - ARM_SLEEVE.shade[c]) * t);
+    }
+    return data;
+  };
+  const atlas = await buildAtlas(vrm, arm, groups, join(OUT, 'arms_vroid.webp'), sleeve);
 
   const bone = (name) => sk.names.indexOf(name);
   const doc = new Document();
@@ -1324,15 +1345,10 @@ async function buildArm(id) {
     let knuckles = sub(at('rightIndexProximal'), at('rightLittleProximal'));
     knuckles = unit(sub(knuckles, forward.map((v) => v * dot3(knuckles, forward))));
     const Z = forward.map((v) => -v);
-    let X;
-    let Y;
-    if (name === 'fist') {
-      X = knuckles.map((v) => -v);
-      Y = cross3(Z, X);
-    } else {
-      Y = knuckles;
-      X = cross3(Y, Z);
-    }
+    // Both poses are held thumb-up, the back of the hand to the right: the fist as a punch is thrown, and the
+    // grip with its handle upright.
+    const Y = knuckles;
+    const X = cross3(Y, Z);
     const toFrame = (p) => {
       const d = sub(p, wrist);
       return [dot3(d, X), dot3(d, Y), dot3(d, Z)];
