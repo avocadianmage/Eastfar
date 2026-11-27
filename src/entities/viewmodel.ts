@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
- * What the player sees of themselves: their right forearm and hand at the
- * lower right, as a fist or closed round whatever is equipped (a stick, a
+ * What the player sees of themselves: their right arm and hand reaching in
+ * from the lower right, as a fist or closed round whatever is equipped (a stick, a
  * sickle or a sword). It bobs with each stride and swings when attacking.
  *
  * The arm is cut from the same character set as the villagers and the sword

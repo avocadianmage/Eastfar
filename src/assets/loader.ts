@@ -337,7 +337,7 @@ export async function loadPropAssets(): Promise<PropAssets> {
 }
 
 export interface ArmAssets {
-  /** The player's right forearm and hand as a fist. Wrist at the origin, forearm running back along +z. */
+  /** The player's right arm (the VRoid one) or forearm (the pack one) and hand as a fist. Wrist at the origin, arm running back along +z. */
   fist: THREE.BufferGeometry;
   /** The same, closed round a handle. */
   grip: THREE.BufferGeometry;

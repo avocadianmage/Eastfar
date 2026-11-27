@@ -13,7 +13,7 @@
  *   anims_vroid.glb   the villagers' animation clips, carried over from anims_female.glb.
  *                     One file serves every VRoid body: the bones have no rest rotation, and the
  *                     hips' travel is stored per metre of hip height.
- *   arms_vroid.glb    the player's right forearm and hand, cut from one character (ARM_SOURCE)
+ *   arms_vroid.glb    the player's right arm and hand, cut from one character (ARM_SOURCE)
  *                     and posed as a fist and a grip, with its own atlas arms_vroid.webp
  *   cast.json         which villagers are VRoid characters, and whose arm the player has
  *                     (the game asks before loading)
@@ -1272,11 +1272,11 @@ function compose(t, q) {
 }
 
 /**
- * The player's right forearm and hand, cut from a VRoid character (ARM_SOURCE) and drawn like the
- * villagers: posed once as a fist and once closed round a handle (the fingers bent at their joints;
- * the T-pose arm is otherwise as modelled), turned so the forearm runs back along +z from the wrist at
- * the origin, with the knuckles level in the fist and the handle upright in the grip, as the game's
- * first-person view expects. Not skinned: the game moves it as a whole. Writes arms_vroid.glb and its
+ * The player's right arm and hand, cut from a VRoid character (ARM_SOURCE) and drawn like the
+ * villagers, its shirt sleeve recoloured (ARM_SLEEVE): posed once as a fist and once closed round a
+ * handle (the fingers bent at their joints; the T-pose arm is otherwise as modelled), turned so the arm
+ * runs back along +z from the wrist at the origin, thumb up and the back of the hand to +x, as the
+ * game's first-person view expects. Not skinned: the game moves it as a whole. Writes arms_vroid.glb and its
  * own small atlas, arms_vroid.webp.
  */
 async function buildArm(id) {
@@ -1294,7 +1294,7 @@ async function buildArm(id) {
   }
   const tri = [];
   for (let t = 0; t < g.indices.length; t += 3) if (kept[g.indices[t]] && kept[g.indices[t + 1]] && kept[g.indices[t + 2]]) tri.push(g.indices[t], g.indices[t + 1], g.indices[t + 2]);
-  if (!tri.length) throw new Error(id + ' has no right forearm');
+  if (!tri.length) throw new Error(id + ' has no right arm');
   const arm = g.subset(tri);
   // The sleeve's pale cloth takes ARM_SLEEVE, keeping its folds; leather bands, buttons and the skin stay.
   const sleeve = (group, data, width, height) => {
@@ -1394,7 +1394,7 @@ async function buildArm(id) {
   await doc.transform(quantize({ quantizePosition: 14, quantizeNormal: 10, quantizeTexcoord: 14, quantizeColor: 8 }), meshopt({ encoder: MeshoptEncoder, level: 'medium' }));
   const file = join(OUT, 'arms_vroid.glb');
   await io.write(file, doc);
-  console.log('arms_vroid.glb: ' + id + "'s right forearm, " + arm.indices.length / 3 + ' triangles in two poses, grip at ' + extras.grip.join(', ') + '; atlas ' + atlas.width + 'x' + atlas.height + ' ' + (atlas.bytes / 1000).toFixed(0) + ' kB');
+  console.log('arms_vroid.glb: ' + id + "'s right arm, " + arm.indices.length / 3 + ' triangles in two poses, grip at ' + extras.grip.join(', ') + '; atlas ' + atlas.width + 'x' + atlas.height + ' ' + (atlas.bytes / 1000).toFixed(0) + ' kB');
   return (await stat(file)).size + atlas.bytes;
 }
 
