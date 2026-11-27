@@ -1262,11 +1262,18 @@ const HAND_POSES = {
   fist: { Proximal: 88, Intermediate: 100, Distal: 70, thumb: [[-17, 24, 18], [-58, 7, -28], [-68, 4, -4]] },
   grip: { Proximal: 72, Intermediate: 78, Distal: 48, thumb: [[-15, 45], [-10, 35], [0, 35]] },
 };
-/** The hand is drawn this much larger than modelled, so that it fills the wide shirt cuff it comes out of. */
-const HAND_SCALE = 1.2;
+/** The hand is drawn this much larger than modelled, so that it fills the shirt cuff it comes out of. */
+const HAND_SCALE = 1.3;
+/**
+ * The shirt's sleeve is full, its end about 10 cm across round a wrist of 4, so from the eye one would look
+ * into it past the hand. Its last CUFF_GATHER metres are gathered in to the wrist, leaving CUFF_ROOM round it.
+ */
+const CUFF_GATHER = 0.07;
+const CUFF_ROOM = 0.004;
 /** The thumb past its first joint is drawn this much smaller again, so that it ends on the curled first finger. */
 const THUMB_SCALE = 0.85;
 
+const dot2 = (a, b) => a[0] * b[0] + a[1] * b[1];
 const axisAngle = (axis, radians) => {
   const [x, y, z] = unit(axis);
   const s = Math.sin(radians / 2);
@@ -1278,6 +1285,151 @@ function compose(t, q, s = 1) {
   const m = [1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * (x * z - y * w), 0, 2 * (x * y - z * w), 1 - 2 * (x * x + z * z), 2 * (y * z + x * w), 0, 2 * (x * z + y * w), 2 * (y * z - x * w), 1 - 2 * (x * x + y * y), 0, t[0], t[1], t[2], 1];
   for (let i = 0; i < 11; i++) if (i % 4 !== 3) m[i] *= s;
   return m;
+}
+
+/**
+ * How to gather the sleeve's end in to the wrist (CUFF_GATHER, CUFF_ROOM), measured on the posed arm: positions
+ * in the arm's frame (wrist at the origin, the arm running back along +z), three per vertex (the poses one
+ * after another), and which vertices are the sleeve's cloth, which the bare skin of the wrist and palm, and
+ * which the skin of the thumb's root. Returns a function that moves one vertex of a pose's `position` and turns
+ * its `normal` to match, with a `summary` for the log.
+ *
+ * The sleeve's end and the wrist inside it are each taken as an ellipse round the arm (fitted outside every
+ * point), and the end is carried smoothly onto the wrist's, CUFF_ROOM wider, then let out round the thumb's
+ * root where that stands out of it: fully as far back as the end's slanted edge reaches, then less and less to
+ * CUFF_GATHER beyond. The folds keep their shape, only smaller.
+ */
+function cuffGather(position, cloth, skin, lump) {
+  const count = position.length / 3;
+  const BINS = 16;
+  const binOf = (x, y) => Math.floor(((Math.atan2(y, x) / (2 * Math.PI) + 1) % 1) * BINS) % BINS;
+  // The sleeve's end runs round at a slant, within a few centimetres of its nearest point to the hand.
+  let nearest = Infinity;
+  for (let v = 0; v < count; v++) if (cloth[v]) nearest = Math.min(nearest, position[v * 3 + 2]);
+  const SLANT = 0.035;
+  const edge = new Array(BINS).fill(Infinity);
+  for (let v = 0; v < count; v++) {
+    const z = position[v * 3 + 2];
+    if (cloth[v] && z < nearest + SLANT) edge[binOf(position[v * 3], position[v * 3 + 1])] = Math.min(edge[binOf(position[v * 3], position[v * 3 + 1])], z);
+  }
+  const back = Math.max(...edge.filter((z) => z < Infinity));
+  // The skin the cuff will close on: on each side, all along what the cuff covers there (it reaches past the
+  // wrist onto the heel of the hand, more on some sides than others).
+  const rim = [];
+  const wrist = [];
+  const lumps = [];
+  for (let v = 0; v < count; v++) {
+    const [x, y, z] = position.slice(v * 3, v * 3 + 3);
+    const from = edge[binOf(x, y)] < Infinity ? edge[binOf(x, y)] : nearest;
+    if (cloth[v] && z < nearest + SLANT) rim.push([x, y]);
+    else if (z > from - 0.005 && z < back + CUFF_GATHER) {
+      if (skin[v]) wrist.push([x, y]);
+      else if (lump[v]) lumps.push([x, y]);
+    }
+  }
+  /** An ellipse round these points: centre, unit axis u (w is u turned a quarter left), half-lengths. */
+  const fit = (pts, grow) => {
+    const m = [0, 1].map((a) => pts.reduce((s, p) => s + p[a], 0) / pts.length);
+    let xx = 0;
+    let xy = 0;
+    let yy = 0;
+    for (const [x, y] of pts) {
+      xx += (x - m[0]) ** 2;
+      xy += (x - m[0]) * (y - m[1]);
+      yy += (y - m[1]) ** 2;
+    }
+    const turn = Math.atan2(2 * xy, xx - yy) / 2;
+    const u = [Math.cos(turn), Math.sin(turn)];
+    const w = [-u[1], u[0]];
+    const span = (axis) => {
+      const d = pts.map((p) => (p[0] - m[0]) * axis[0] + (p[1] - m[1]) * axis[1]);
+      return [Math.min(...d), Math.max(...d)];
+    };
+    const [su, sw] = [span(u), span(w)];
+    const c = [0, 1].map((a) => m[a] + (u[a] * (su[0] + su[1])) / 2 + (w[a] * (sw[0] + sw[1])) / 2);
+    const half = [(su[1] - su[0]) / 2, (sw[1] - sw[0]) / 2];
+    // The ellipse through the widest points misses the corners between them: widen it to take them in.
+    let out = 1;
+    for (const [x, y] of pts) {
+      const dx = x - c[0];
+      const dy = y - c[1];
+      out = Math.max(out, Math.hypot((dx * u[0] + dy * u[1]) / half[0], (dx * w[0] + dy * w[1]) / half[1]));
+    }
+    return { c, u, w, a: half.map((h) => h * out + grow) };
+  };
+  const end = fit(rim, 0);
+  const to = fit(wrist, CUFF_ROOM);
+  // Pair the wrist's axes with the end's, so the cuff is not turned on the way.
+  if (Math.abs(dot2(end.u, to.u)) < Math.abs(dot2(end.u, to.w))) {
+    to.u = to.w;
+    to.a = [to.a[1], to.a[0]];
+  }
+  if (dot2(end.u, to.u) < 0) to.u = to.u.map((x) => -x);
+  to.w = [-to.u[1], to.u[0]];
+  // Where something stands out of the wrist's ellipse (the thumb's root), the cuff is let out round it: in each
+  // direction from the wrist's centre, as far as the farthest skin near that direction needs, falling away
+  // over a quarter of a radian or so either side.
+  const FALL = 0.13;
+  const TURNS = 180;
+  const need = new Array(TURNS).fill(0);
+  for (let i = 0; i < TURNS; i++) {
+    const at = (i / TURNS) * 2 * Math.PI;
+    for (const [x, y] of [...wrist, ...lumps]) {
+      const dx = x - to.c[0];
+      const dy = y - to.c[1];
+      let turn = Math.abs(Math.atan2(dy, dx) - at) % (2 * Math.PI);
+      if (turn > Math.PI) turn = 2 * Math.PI - turn;
+      need[i] = Math.max(need[i], Math.hypot(dx, dy) + CUFF_ROOM - FALL * turn * turn);
+    }
+  }
+  const letOut = (dx, dy) => {
+    const f = ((Math.atan2(dy, dx) / (2 * Math.PI) + 1) % 1) * TURNS;
+    const i = Math.floor(f) % TURNS;
+    const want = need[i] + (need[(i + 1) % TURNS] - need[i]) * (f - Math.floor(f));
+    const r = Math.hypot(dx, dy);
+    const cu = (dx * to.u[0] + dy * to.u[1]) / r;
+    const cw = (dx * to.w[0] + dy * to.w[1]) / r;
+    const fits = 1 / Math.hypot(cu / to.a[0], cw / to.a[1]);
+    return Math.max(1, want / fits);
+  };
+  const move = (p) => {
+    const [x, y, z] = p;
+    const dx = x - end.c[0];
+    const dy = y - end.c[1];
+    const s = (dx * end.u[0] + dy * end.u[1]) / end.a[0];
+    const r = (dx * end.w[0] + dy * end.w[1]) / end.a[1];
+    const ox = to.u[0] * s * to.a[0] + to.w[0] * r * to.a[1];
+    const oy = to.u[1] * s * to.a[0] + to.w[1] * r * to.a[1];
+    const out = ox || oy ? letOut(ox, oy) : 1;
+    const gx = to.c[0] + ox * out;
+    const gy = to.c[1] + oy * out;
+    const d = Math.min(1, Math.max(0, (z - back) / CUFF_GATHER));
+    const t = 1 - d * d * (3 - 2 * d);
+    return [x + (gx - x) * t, y + (gy - y) * t, z];
+  };
+  const across = (e) => e.a.map((h) => (h * 200).toFixed(1)).join('x');
+  const apply = (pos, nor, v) => {
+    const p = pos.slice(v * 3, v * 3 + 3);
+    const n = nor.slice(v * 3, v * 3 + 3);
+    // The normal turns with the surface: by the cofactors of the move's Jacobian, taken numerically.
+    const e = 0.0005;
+    const axis = [0, 1, 2].map((a) => {
+      const lo = [...p];
+      const hi = [...p];
+      lo[a] -= e;
+      hi[a] += e;
+      return sub(move(hi), move(lo));
+    });
+    const c = [cross3(axis[1], axis[2]), cross3(axis[2], axis[0]), cross3(axis[0], axis[1])];
+    const turned = unit([0, 1, 2].map((a) => c[0][a] * n[0] + c[1][a] * n[1] + c[2][a] * n[2]));
+    const moved = move(p);
+    for (let a = 0; a < 3; a++) {
+      pos[v * 3 + a] = moved[a];
+      nor[v * 3 + a] = turned[a];
+    }
+  };
+  apply.summary = `cuff gathered from ${across(end)} to ${across(to)} cm`;
+  return apply;
 }
 
 /**
@@ -1293,7 +1445,16 @@ async function buildArm(id) {
   const sk = tidySkeleton(vrm);
   const all = await gather(vrm, sk);
   const { groups } = all;
-  const { g } = await dropCovered(vrm, sk, all.g, groups);
+  const g = all.g;
+  // What the clothes hide goes, except near the wrist: what hid it there was the sleeve's full end, which is
+  // gathered in below (cuffGather), and the skin just inside the cuff must run on unbroken into it.
+  const { g: shown } = await dropCovered(vrm, sk, g, groups);
+  const corner = (geo, i) => geo.position.slice(i * 3, i * 3 + 3).map((x) => Math.round(x * 1e5)).join(',');
+  const face = (geo, t) => [0, 1, 2].map((k) => corner(geo, geo.indices[t + k])).sort().join(' ');
+  const showing = new Set();
+  for (let t = 0; t < shown.indices.length; t += 3) showing.add(face(shown, t));
+  const wristX = sk.positions[sk.names.indexOf('rightHand')][0];
+  const nearWrist = (i) => g.position[i * 3] - wristX < CUFF_GATHER;
   const onArm = sk.names.map((n) => ARM_BONES.test(n));
   const kept = new Uint8Array(g.vertexCount);
   for (let v = 0; v < g.vertexCount; v++) {
@@ -1302,7 +1463,12 @@ async function buildArm(id) {
     kept[v] = share >= 0.5 ? 1 : 0;
   }
   const tri = [];
-  for (let t = 0; t < g.indices.length; t += 3) if (kept[g.indices[t]] && kept[g.indices[t + 1]] && kept[g.indices[t + 2]]) tri.push(g.indices[t], g.indices[t + 1], g.indices[t + 2]);
+  for (let t = 0; t < g.indices.length; t += 3) {
+    const [a, b, c] = [g.indices[t], g.indices[t + 1], g.indices[t + 2]];
+    if (!kept[a] || !kept[b] || !kept[c]) continue;
+    if (!showing.has(face(g, t)) && !(nearWrist(a) && nearWrist(b) && nearWrist(c))) continue;
+    tri.push(a, b, c);
+  }
   if (!tri.length) throw new Error(id + ' has no right arm');
   const arm = g.subset(tri);
   // The sleeve's pale cloth takes ARM_SLEEVE, keeping its folds; leather bands, buttons and the skin stay.
@@ -1328,6 +1494,18 @@ async function buildArm(id) {
   const scene = doc.createScene('arms');
   const extras = { kind: 'vroid', from: id };
   let thumbPast = [];
+  const clothV = arm.group.map((i) => groups[i].kind === 'cloth');
+  // The skin of the wrist and palm, which the cuff closes on, and of the thumb's root (the fleshy heel of the
+  // hand beside the wrist), which it must clear too.
+  const mostly = (v) => {
+    let top = 0;
+    for (let k = 1; k < 4; k++) if (arm.weights[v * 4 + k] > arm.weights[v * 4 + top]) top = k;
+    return arm.joints[v * 4 + top];
+  };
+  const wristBones = new Set([bone('rightLowerArm'), bone('rightHand')]);
+  const skinV = arm.group.map((i, v) => groups[i].kind === 'skin' && wristBones.has(mostly(v)));
+  const rootV = arm.group.map((i, v) => groups[i].kind === 'skin' && mostly(v) === bone('rightThumbMetacarpal'));
+  const posed = [];
   for (const [name, bend] of Object.entries(HAND_POSES)) {
     const rot = sk.names.map(() => [0, 0, 0, 1]);
     // In the T-pose the right hand points along -x with its palm down; a finger closes by turning about +z.
@@ -1405,6 +1583,23 @@ async function buildArm(id) {
       const fingers = reach(/^right(Index|Middle|Ring|Little)/);
       thumbPast = thumb.map((t, a) => ((t - fingers[a]) * 100).toFixed(1));
     }
+    if (name === 'grip') {
+      // The middle of the closed hand, where a handle passes through it.
+      const mids = ['rightIndexIntermediate', 'rightMiddleIntermediate', 'rightRingIntermediate', 'rightLittleIntermediate', 'rightIndexProximal', 'rightLittleProximal', 'rightThumbProximal'].filter((n) => bone(n) >= 0).map((n) => toFrame(at(n)));
+      extras.grip = [0, 1, 2].map((a) => round(mids.reduce((sum, m) => sum + m[a], 0) / mids.length));
+    }
+    posed.push({ name, position, normal });
+  }
+  // One cuff for both poses, clear of the hand in either, so it does not change when the hand does.
+  const none = clothV.map(() => false);
+  const gatherCuff = cuffGather(
+    posed.flatMap((p) => p.position),
+    posed.flatMap((p, k) => (k ? none : clothV)),
+    posed.flatMap(() => skinV),
+    posed.flatMap(() => rootV),
+  );
+  for (const { name, position, normal } of posed) {
+    for (let v = 0; v < arm.vertexCount; v++) if (clothV[v]) gatherCuff(position, normal, v);
     const acc = (type, array, normalized = false) => doc.createAccessor().setType(type).setArray(array).setNormalized(normalized).setBuffer(buffer);
     const prim = doc
       .createPrimitive()
@@ -1416,17 +1611,12 @@ async function buildArm(id) {
       .setAttribute('TEXCOORD_1', acc('VEC2', Float32Array.from(arm.line)))
       .setAttribute('COLOR_0', acc('VEC4', Uint8Array.from(arm.shade), true));
     scene.addChild(doc.createNode(name).setMesh(doc.createMesh(name).addPrimitive(prim)));
-    if (name === 'grip') {
-      // The middle of the closed hand, where a handle passes through it.
-      const mids = ['rightIndexIntermediate', 'rightMiddleIntermediate', 'rightRingIntermediate', 'rightLittleIntermediate', 'rightIndexProximal', 'rightLittleProximal', 'rightThumbProximal'].filter((n) => bone(n) >= 0).map((n) => toFrame(at(n)));
-      extras.grip = [0, 1, 2].map((a) => round(mids.reduce((sum, m) => sum + m[a], 0) / mids.length));
-    }
   }
   scene.setExtras(extras);
   await doc.transform(quantize({ quantizePosition: 14, quantizeNormal: 10, quantizeTexcoord: 14, quantizeColor: 8 }), meshopt({ encoder: MeshoptEncoder, level: 'medium' }));
   const file = join(OUT, 'arms_vroid.glb');
   await io.write(file, doc);
-  console.log('arms_vroid.glb: ' + id + "'s right arm, " + arm.indices.length / 3 + ' triangles in two poses, grip at ' + extras.grip.join(', ') + ', fist thumb past the fingers by ' + thumbPast[0] + ' cm forward, ' + thumbPast[1] + ' cm up; atlas ' + atlas.width + 'x' + atlas.height + ' ' + (atlas.bytes / 1000).toFixed(0) + ' kB');
+  console.log('arms_vroid.glb: ' + id + "'s right arm, " + arm.indices.length / 3 + ' triangles in two poses, grip at ' + extras.grip.join(', ') + ', fist thumb past the fingers by ' + thumbPast[0] + ' cm forward, ' + thumbPast[1] + ' cm up, ' + gatherCuff.summary + '; atlas ' + atlas.width + 'x' + atlas.height + ' ' + (atlas.bytes / 1000).toFixed(0) + ' kB');
   return (await stat(file)).size + atlas.bytes;
 }
 
