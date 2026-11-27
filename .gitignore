@@ -6,3 +6,5 @@ shots/
 *.log
 .DS_Store
 .cache/
+# VRoid Studio project files and raw exports (large; kept on the owner's computer, see docs/ANIME-CAST.md)
+art/vroid/

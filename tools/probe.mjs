@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Run a snippet of JavaScript inside the running game and print the result.
  *   node tools/probe.mjs "window.__eastfar.nearestTree(40,-330)" ["query"]
@@ -6,8 +7,9 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
-const root = resolve(new URL('..', import.meta.url).pathname, 'dist');
+const root = resolve(fileURLToPath(new URL('..', import.meta.url)), 'dist');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
 const server = createServer(async (req, res) => {
   try {

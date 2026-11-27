@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * Deterministic screenshots of the built game.
  *
@@ -12,9 +13,10 @@
 import { createServer } from 'node:http';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
-const root = resolve(new URL('..', import.meta.url).pathname, 'dist');
+const root = resolve(fileURLToPath(new URL('..', import.meta.url)), 'dist');
 const MIME = {
   '.html': 'text/html',
   '.js': 'text/javascript',
