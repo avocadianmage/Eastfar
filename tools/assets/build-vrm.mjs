@@ -17,6 +17,8 @@
  *                     and posed as a fist and a grip, with its own atlas arms_vroid.webp
  *   cast.json         which villagers are VRoid characters, and whose arm the player has
  *                     (the game asks before loading)
+ *   statue/<id>.glb   a character made to stand as a stone statue (STATUES: Aleric), posed and
+ *                     baked; see buildStatue
  *
  * A villager with no .vrm keeps the model made by build.mjs. Nothing here depends on one
  * file's meshes, materials or bone counts.
@@ -1811,10 +1813,323 @@ async function buildAnimations(reference) {
   return bytes;
 }
 
+// ---------------------------------------------------------------- statues
+
+/** Characters made in VRoid Studio to stand as stone statues, not to live in the village: built by buildStatue, never as villagers. */
+const STATUES = ['aleric'];
+const STATUE_OUT = join(ROOT, 'public', 'assets', 'statue');
+/** Triangles in the statue's near and far versions, and how far each may stray from the shape. */
+const STATUE_TRIANGLES = [26000, 5000];
+const STATUE_ERROR = [0.004, 0.03];
+/**
+ * How strongly what is painted on each kind of part (the eyes, the brows and lashes, the folds drawn on
+ * cloth) shows in the stone, as carving and weathering: a little on cloth and skin, most on the face's lines.
+ */
+const STONE_DETAIL = { face: 0.12, facepart: 0.85, eye: 0.5, hair: 0.3, cloth: 0.3, skin: 0.1 };
+/**
+ * Aleric's pose: each bone's turn from rest as [about x, about y, about z] in degrees, the turn about z made
+ * first. He faces +z, his right hand along -x in the T-pose. He holds a staff upright in his right hand, and
+ * with his left he points ahead (east, once he is turned to face the sunrise); his head is a little raised.
+ */
+const STATUE_POSE = {
+  spine: [-2, 0, 0],
+  chest: [-3, 3, 0],
+  neck: [-2, 4, 0],
+  head: [-7, 9, 0],
+  rightShoulder: [0, 0, 4],
+  rightUpperArm: [-16, 8, 70],
+  rightLowerArm: [0, 84, 0],
+  rightHand: [-80, 0, 0],
+  leftShoulder: [0, 0, -6],
+  leftUpperArm: [0, -68, 14],
+  leftLowerArm: [0, -10, 0],
+  leftHand: [0, 0, -6],
+};
+/** His fingers: the right hand closed round the staff, the left pointing with its first finger. Angles as HAND_POSES. */
+const STATUE_HANDS = {
+  right: HAND_POSES.grip,
+  left: { Index: [4, 2, 2], Middle: [70, 85, 50], Ring: [76, 90, 55], Little: [80, 92, 55], thumb: [[12, -30], [8, -25], [0, -20]] },
+};
+
+/**
+ * A statue: the character posed (STATUE_POSE), every vertex carried into that pose and the skeleton dropped,
+ * at a near and a far level of detail, with the colour atlas kept for what is painted (see STONE_DETAIL) and
+ * the cut-out shapes of hair and lashes. Each vertex also carries how sheltered it is (the folds, the crook of
+ * an arm, under the coat), so the game can darken the stone there and let moss gather.
+ *   statue/<id>.glb   two meshes, near and far; position, normal, texture coordinate, and COLOR_0 =
+ *                     [how much of the painting shows, how open to the sky it is, 0, 1]. The scene's extras
+ *                     give where the right hand grips (the staff passes up through it), the top of the head
+ *                     and the soles of the feet, in metres, the figure facing +z.
+ *   statue/<id>.webp  its atlas
+ */
+/** The circlet round the statue's brow: this far above the head bone, this tall and thick, this far clear of the hair (metres). */
+const CIRCLET = { above: 0.118, height: 0.02, thickness: 0.007, clear: 0.005 };
+
+/**
+ * A plain band round the statue's head at the brow, with a pointed crest over the forehead, fitted in the rest
+ * pose to sit just outside whatever reaches furthest out at that height (the hair) all the way round, and bound
+ * wholly to the head so it turns with it. Added to `lod` (the shape is measured on the full geometry `all`).
+ */
+function addCirclet(lod, all, sk, groups, head) {
+  const hp = sk.positions[head];
+  const y0 = hp[1] + CIRCLET.above;
+  const BINS = 48;
+  const reach = new Float32Array(BINS);
+  for (let v = 0; v < all.vertexCount; v++) {
+    const dy = all.position[v * 3 + 1] - y0;
+    if (Math.abs(dy) > CIRCLET.height) continue;
+    const dx = all.position[v * 3] - hp[0];
+    const dz = all.position[v * 3 + 2] - hp[2];
+    const d = Math.hypot(dx, dz);
+    if (d > 0.22) continue;
+    const b = Math.floor(((Math.atan2(dz, dx) / (Math.PI * 2) + 1) % 1) * BINS);
+    reach[b] = Math.max(reach[b], d);
+  }
+  // Fill gaps from the neighbours, then round the outline off so that one stray lock does not kink it.
+  for (let pass = 0; pass < BINS; pass++) for (let b = 0; b < BINS; b++) if (!reach[b]) reach[b] = Math.max(reach[(b + 1) % BINS], reach[(b + BINS - 1) % BINS]);
+  const radius = Array.from({ length: BINS }, (_, b) => {
+    let m = 0;
+    for (let k = -2; k <= 2; k++) m = Math.max(m, reach[(b + k + BINS) % BINS]);
+    return m + CIRCLET.clear;
+  });
+  // A texel of plain cloth to read the atlas at (opaque, pale: the band is plain stone).
+  const cloth = groups.findIndex((gr) => gr.kind === 'cloth');
+  let uvAt = [0.5, 0.5];
+  for (let t = 0; t < lod.indices.length; t += 3) {
+    const a = lod.indices[t];
+    if (lod.group[a] !== cloth) continue;
+    const tri = [a, lod.indices[t + 1], lod.indices[t + 2]];
+    uvAt = [0, 1].map((k) => tri.reduce((s, i) => s + lod.uv[i * 2 + k], 0) / 3);
+    break;
+  }
+  const quad = (pts, n) => {
+    const base = lod.vertexCount;
+    for (const p of pts) {
+      lod.position.push(...p);
+      lod.normal.push(...n);
+      lod.uv.push(...uvAt);
+      lod.line.push(0, 0);
+      lod.shade.push(0, 0, 0, 0);
+      lod.joints.push(head, 0, 0, 0);
+      lod.weights.push(1, 0, 0, 0);
+      lod.group.push(cloth);
+      lod.lock.push(0);
+      lod.nearOnly.push(0);
+      lod.layer.push(0);
+      for (const d of lod.shapes.values()) d.push(0, 0, 0);
+    }
+    lod.indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  };
+  const at = (b, out, y) => {
+    const th = (b / BINS) * Math.PI * 2;
+    const r = radius[b % BINS] + out;
+    return [hp[0] + Math.cos(th) * r, y, hp[2] + Math.sin(th) * r];
+  };
+  const h = CIRCLET.height / 2;
+  const T = CIRCLET.thickness;
+  for (let b = 0; b < BINS; b++) {
+    const th = ((b + 0.5) / BINS) * Math.PI * 2;
+    const n = [Math.cos(th), 0, Math.sin(th)];
+    // Outside, top, inside, bottom; wound to face out.
+    quad([at(b + 1, T, y0 - h), at(b, T, y0 - h), at(b, T, y0 + h), at(b + 1, T, y0 + h)], n);
+    quad([at(b + 1, T, y0 + h), at(b, T, y0 + h), at(b, 0, y0 + h), at(b + 1, 0, y0 + h)], [0, 1, 0]);
+    quad([at(b + 1, 0, y0 + h), at(b, 0, y0 + h), at(b, 0, y0 - h), at(b + 1, 0, y0 - h)], n.map((c) => -c));
+    quad([at(b + 1, 0, y0 - h), at(b, 0, y0 - h), at(b, T, y0 - h), at(b + 1, T, y0 - h)], [0, -1, 0]);
+  }
+  // The crest over the forehead (+z): a pointed leaf of stone standing up from the band, leaning back a little.
+  const front = Math.round(BINS / 4);
+  const f = at(front, T + 0.002, y0);
+  const back = at(front, T - 0.003, y0);
+  const w = 0.018;
+  const tip = [f[0], y0 + h + 0.038, f[2] - 0.006];
+  const left = [f[0] + w, y0 + h * 0.2, f[2]];
+  const right = [f[0] - w, y0 + h * 0.2, f[2]];
+  const low = [f[0], y0 - h - 0.008, f[2] + 0.002];
+  quad([low, left, tip, right], [0, 0.15, 1]);
+  const lb = [back[0] + w, left[1], back[2]];
+  const rb = [back[0] - w, right[1], back[2]];
+  const tb = [tip[0], tip[1], tip[2] - 0.004];
+  quad([right, tip, tb, rb], [-1, 0.3, 0]);
+  quad([left, lb, tb, tip], [1, 0.3, 0]);
+}
+
+async function buildStatue(id) {
+  const vrm = await readVrm(join(SOURCES, `${id}.vrm`));
+  const sk = tidySkeleton(vrm);
+  const all = await gather(vrm, sk);
+  const { groups } = all;
+  const { g: shown } = await dropCovered(vrm, sk, all.g, groups);
+  // No glints in stone eyes and no inside of a mouth.
+  const keep = [];
+  for (let t = 0; t < shown.indices.length; t += 3) {
+    const tri = [shown.indices[t], shown.indices[t + 1], shown.indices[t + 2]];
+    if (tri.some((v) => shown.nearOnly[v])) continue;
+    keep.push(...tri);
+  }
+  const g = shown.subset(keep);
+  await mkdir(STATUE_OUT, { recursive: true });
+  const atlas = await buildAtlas(vrm, g, groups, join(STATUE_OUT, `${id}.webp`));
+  const lods = [g.simplified(STATUE_TRIANGLES[0], STATUE_ERROR[0], { keepLocked: true }), g.simplified(STATUE_TRIANGLES[1], STATUE_ERROR[1], { prune: true })];
+  const bone = (name) => sk.names.indexOf(name);
+  for (const lod of lods) addCirclet(lod, g, sk, groups, bone('head'));
+
+  // The pose.
+  const rad = (d) => (d * Math.PI) / 180;
+  const euler = ([x, y, z]) => qmul(qmul(axisAngle([1, 0, 0], rad(x)), axisAngle([0, 1, 0], rad(y))), axisAngle([0, 0, 1], rad(z)));
+  const rot = sk.names.map(() => [0, 0, 0, 1]);
+  for (const [name, angles] of Object.entries(STATUE_POSE)) if (bone(name) >= 0) rot[bone(name)] = euler(angles);
+  // Fingers close by turning about +z on the right hand and about -z on the left (the hands mirror each other).
+  for (const [side, sign] of [['right', 1], ['left', -1]]) {
+    const pose = STATUE_HANDS[side];
+    for (const finger of ['Index', 'Middle', 'Ring', 'Little']) {
+      ['Proximal', 'Intermediate', 'Distal'].forEach((part, k) => {
+        const b = bone(side + finger + part);
+        const angle = Array.isArray(pose[finger]) ? pose[finger][k] : pose[part];
+        if (b >= 0 && angle !== undefined) rot[b] = axisAngle([0, 0, sign], rad(angle));
+      });
+    }
+    ['ThumbMetacarpal', 'ThumbProximal', 'ThumbDistal'].forEach((part, k) => {
+      const b = bone(side + part);
+      if (b < 0 || !pose.thumb[k]) return;
+      const [aboutY, aboutZ, aboutX = 0] = pose.thumb[k].map(rad);
+      rot[b] = qmul(qmul(axisAngle([0, 1, 0], aboutY), axisAngle([0, 0, 1], aboutZ)), axisAngle([1, 0, 0], aboutX));
+    });
+  }
+  const world = [];
+  for (let j = 0; j < sk.names.length; j++) {
+    const local = compose(sk.translation[j], rot[j]);
+    world.push(sk.parents[j] < 0 ? local : mulMat(world[sk.parents[j]], local));
+  }
+  const skin = world.map((m, j) => mulMat(m, Array.from(sk.inverseBind.subarray(j * 16, j * 16 + 16))));
+  const at = (name) => applyPoint(world[bone(name)], [0, 0, 0]);
+
+  const posed = lods.map((lod) => {
+    const position = new Float32Array(lod.vertexCount * 3);
+    const normal = new Float32Array(lod.vertexCount * 3);
+    for (let v = 0; v < lod.vertexCount; v++) {
+      const p = lod.position.slice(v * 3, v * 3 + 3);
+      const n = lod.normal.slice(v * 3, v * 3 + 3);
+      const outP = [0, 0, 0];
+      const outN = [0, 0, 0];
+      for (let k = 0; k < 4; k++) {
+        const w = lod.weights[v * 4 + k];
+        if (!w) continue;
+        const sp = applyPoint(skin[lod.joints[v * 4 + k]], p);
+        const sn = applyDir(skin[lod.joints[v * 4 + k]], n);
+        for (let a = 0; a < 3; a++) {
+          outP[a] += sp[a] * w;
+          outN[a] += sn[a] * w;
+        }
+      }
+      position.set(outP, v * 3);
+      normal.set(unit(outN), v * 3);
+    }
+    return { lod, position, normal };
+  });
+
+  // How sheltered each vertex is: how much of the statue lies just above its surface, within SHELTER metres,
+  // the nearer and the more squarely above, the more. Measured on the near level; the far level takes the
+  // value of the nearest near vertex.
+  const SHELTER = 0.1;
+  const near = posed[0];
+  const cellOf = (x) => Math.floor(x / SHELTER);
+  const grid = new Map();
+  const key = (i, j, k) => `${i},${j},${k}`;
+  for (let v = 0; v < near.lod.vertexCount; v++) {
+    const k = key(cellOf(near.position[v * 3]), cellOf(near.position[v * 3 + 1]), cellOf(near.position[v * 3 + 2]));
+    if (!grid.has(k)) grid.set(k, []);
+    grid.get(k).push(v);
+  }
+  const around = (p, visit) => {
+    const [ci, cj, ck] = [cellOf(p[0]), cellOf(p[1]), cellOf(p[2])];
+    for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++) for (let k = ck - 1; k <= ck + 1; k++) for (const o of grid.get(key(i, j, k)) ?? []) visit(o);
+  };
+  const open = new Float32Array(near.lod.vertexCount);
+  for (let v = 0; v < near.lod.vertexCount; v++) {
+    const p = near.position.subarray(v * 3, v * 3 + 3);
+    const n = near.normal.subarray(v * 3, v * 3 + 3);
+    let cover = 0;
+    around(p, (o) => {
+      const d = [near.position[o * 3] - p[0], near.position[o * 3 + 1] - p[1], near.position[o * 3 + 2] - p[2]];
+      const len = Math.hypot(...d);
+      if (len < 0.012 || len > SHELTER) return;
+      const facing = dot3(d, n) / len;
+      if (facing > 0.2) cover += (facing - 0.2) * (1 - len / SHELTER);
+    });
+    open[v] = 1 / (1 + 0.09 * cover);
+  }
+  const openness = posed.map(({ lod, position }, k) => {
+    if (k === 0) return open;
+    const out = new Float32Array(lod.vertexCount);
+    for (let v = 0; v < lod.vertexCount; v++) {
+      const p = position.subarray(v * 3, v * 3 + 3);
+      let best = 1;
+      let bd = Infinity;
+      around(p, (o) => {
+        const d = Math.hypot(near.position[o * 3] - p[0], near.position[o * 3 + 1] - p[1], near.position[o * 3 + 2] - p[2]);
+        if (d < bd) {
+          bd = d;
+          best = open[o];
+        }
+      });
+      out[v] = best;
+    }
+    return out;
+  });
+
+  // Where the right hand closes (the staff runs up through it), the top of the head and the soles of the feet.
+  const mids = ['rightIndexIntermediate', 'rightMiddleIntermediate', 'rightRingIntermediate', 'rightLittleIntermediate', 'rightIndexProximal', 'rightLittleProximal', 'rightThumbProximal'].filter((n) => bone(n) >= 0).map(at);
+  const grip = [0, 1, 2].map((a) => round(mids.reduce((sum, m) => sum + m[a], 0) / mids.length));
+  let top = -Infinity;
+  let sole = Infinity;
+  for (let i = 1; i < near.position.length; i += 3) {
+    top = Math.max(top, near.position[i]);
+    sole = Math.min(sole, near.position[i]);
+  }
+  const extras = { kind: 'statue', name: vrm.vrm.meta?.name ?? id, grip, head: at('head').map((x) => round(x)), top: round(top, 3), sole: round(sole, 3), pointing: at('leftIndexDistal').map((x) => round(x)) };
+
+  const doc = new Document();
+  doc.setLogger(new Logger(Logger.Verbosity.SILENT));
+  doc.getRoot().getAsset().copyright = "Statue of a character made in VRoid Studio; used under pixiv's conditions. Not CC0 and not under the GPL: see CREDITS.md.";
+  const buffer = doc.createBuffer();
+  const material = doc.createMaterial('stone');
+  const scene = doc.createScene(id).setExtras(extras);
+  posed.forEach(({ lod, position, normal }, k) => {
+    const colour = new Uint8Array(lod.vertexCount * 4);
+    for (let v = 0; v < lod.vertexCount; v++) {
+      colour[v * 4] = Math.round(255 * STONE_DETAIL[groups[lod.group[v]].kind]);
+      colour[v * 4 + 1] = Math.round(255 * openness[k][v]);
+      colour[v * 4 + 3] = 255;
+    }
+    const acc = (type, array, normalized = false) => doc.createAccessor().setType(type).setArray(array).setNormalized(normalized).setBuffer(buffer);
+    const prim = doc
+      .createPrimitive()
+      .setMaterial(material)
+      .setIndices(acc('SCALAR', lod.vertexCount > 65535 ? Uint32Array.from(lod.indices) : Uint16Array.from(lod.indices)))
+      .setAttribute('POSITION', acc('VEC3', position))
+      .setAttribute('NORMAL', acc('VEC3', normal))
+      .setAttribute('TEXCOORD_0', acc('VEC2', Float32Array.from(lod.uv)))
+      .setAttribute('COLOR_0', acc('VEC4', colour, true));
+    const name = k === 0 ? 'near' : 'far';
+    scene.addChild(doc.createNode(name).setMesh(doc.createMesh(name).addPrimitive(prim)));
+  });
+  await doc.transform(quantize({ quantizePosition: 14, quantizeNormal: 10, quantizeTexcoord: 14, quantizeColor: 8 }), meshopt({ encoder: MeshoptEncoder, level: 'medium' }));
+  const file = join(STATUE_OUT, `${id}.glb`);
+  await io.write(file, doc);
+  const bytes = (await stat(file)).size;
+  const tris = (x) => x.indices.length / 3;
+  console.log(
+    `statue ${id}: ${tris(g)} triangles → ${lods.map(tris).join(' / ')}; grip at ${grip.join(', ')}, head at ${extras.head.join(', ')}, ` +
+      `${extras.sole}..${extras.top} m tall; model ${(bytes / 1000).toFixed(0)} kB, atlas ${atlas.width}×${atlas.height} ${(atlas.bytes / 1000).toFixed(0)} kB`,
+  );
+  return bytes + atlas.bytes;
+}
+
 // ---------------------------------------------------------------- main
 
 await mkdir(OUT, { recursive: true });
-const found = existsSync(SOURCES) ? (await readdir(SOURCES)).filter((f) => f.endsWith('.vrm')).map((f) => f.slice(0, -4)).sort() : [];
+// (Statues are made in VRoid Studio too, but are not villagers: see buildStatue.)
+const found = existsSync(SOURCES) ? (await readdir(SOURCES)).filter((f) => f.endsWith('.vrm')).map((f) => f.slice(0, -4)).filter((id) => !STATUES.includes(id)).sort() : [];
 const castFile = join(OUT, 'cast.json');
 const before = existsSync(castFile) ? JSON.parse(await readFile(castFile, 'utf8')).vroid ?? [] : [];
 // A character built before whose source is not on this computer keeps its built files.
@@ -1858,5 +2173,14 @@ await writeFile(castFile, `${JSON.stringify({ vroid: cast, ...(arm ? { arm } : {
 // A villager who is no longer a VRoid character needs their atlas no more.
 for (const id of before) if (!cast.includes(id)) await rm(join(OUT, `${id}.webp`), { force: true });
 
-if (reference && !args.includes('--no-anims')) total += await buildAnimations(reference);
+if (reference && !args.includes('--no-anims') && (!only || only.some((id) => found.includes(id)))) total += await buildAnimations(reference);
+for (const id of STATUES) {
+  if (!existsSync(join(SOURCES, `${id}.vrm`)) || (only && !only.includes(id))) continue;
+  try {
+    total += await buildStatue(id);
+  } catch (e) {
+    console.error(`! statue ${id}: ${e.message}`);
+    process.exitCode = 1;
+  }
+}
 console.log(`${cast.length ? `VRoid characters: ${cast.join(', ')}` : 'no VRoid characters'}${total ? `; ${(total / 1e6).toFixed(2)} MB written` : ''}`);

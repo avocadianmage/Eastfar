@@ -57,8 +57,11 @@ test('a quest can be taken, done and handed in', async ({ page }) => {
   await api(page, 'api.choose(null);');
   expect(await api<string>(page, 'return api.mode();')).toBe('play');
 
-  // Go to the statue.
+  // Go to the statue: Aleric stands on his plinth, staff in hand, in full detail this close.
   await api(page, 'api.teleport(-36, -384, 240, 5);');
+  await frames(page, 3);
+  expect(await api<string[]>(page, "return ['statue-plinth', 'statue-near', 'statue-far', 'statue-staff'].filter((n) => !api.game.scene.getObjectByName(n));")).toEqual([]);
+  expect(await api<boolean>(page, "return api.game.scene.getObjectByName('statue-near').visible;")).toBe(true);
   await page.waitForFunction(() => (window as unknown as W).__eastfar.questStatus('old_legend') === 'ready', null, { timeout: 60_000 });
   expect(await api<number>(page, 'return api.count("aleric_token");')).toBe(1);
 

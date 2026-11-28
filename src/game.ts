@@ -3,7 +3,7 @@
  * The game: builds the world, then runs the frame loop.
  */
 import * as THREE from 'three/webgpu';
-import { assetUrl, loadArmAssets, loadCharacterAssets, loadPropAssets, type CharacterAssets } from './assets/loader';
+import { assetUrl, loadArmAssets, loadCharacterAssets, loadPropAssets, loadStatueAssets, type CharacterAssets } from './assets/loader';
 import { Ambience, type Surface } from './audio/ambience';
 import { Props } from './buildings/props';
 import { Village } from './buildings/village';
@@ -17,7 +17,7 @@ import { createGate, type Gate } from './entities/gate';
 import { Scarecrows } from './entities/scarecrows';
 import { MoonCaps } from './entities/mushrooms';
 import { Npcs } from './entities/npc';
-import { createStatue } from './entities/statue';
+import { createStatue, type Statue } from './entities/statue';
 import { Viewmodel } from './entities/viewmodel';
 import { Gameplay } from './systems/gameplay';
 import { NPCS } from './data/npcs';
@@ -98,6 +98,7 @@ export class Game {
   private figureMaterial?: THREE.Material;
   bees?: BeeSwarms;
   caps?: MoonCaps;
+  statue?: Statue;
   scarecrows?: Scarecrows;
   crows?: Crows;
   gate?: Gate;
@@ -157,6 +158,13 @@ export class Game {
     figures?.catch(() => {});
     const propsLoading = this.params.skip.has('props') || this.params.skip.has('village') ? null : loadPropAssets();
     propsLoading?.catch(() => {});
+    // Aleric's statue (made by tools/assets/build-vrm.mjs); without it the plinth stands empty.
+    const statueLoading = this.params.skip.has('village')
+      ? null
+      : loadStatueAssets().catch((e: unknown) => {
+          console.warn('statue not loaded', e);
+          return null;
+        });
     this.terrain = bakeTerrain();
 
     onStatus('Lighting the sky…');
@@ -193,7 +201,7 @@ export class Game {
     const content: string[] = [];
     if (this.village) {
       const built = this.village.material;
-      createStatue(this.scene, built, this.terrain, this.physics);
+      this.statue = createStatue(this.scene, this.terrain, this.textures, this.physics, statueLoading ? await statueLoading : null);
       if (figures) {
         this.figures = await figures;
         this.figureMaterial = characterMaterial(this.figures.atlas);
@@ -348,6 +356,7 @@ export class Game {
     this.trees?.update(this.camera, dt);
     this.flowers?.update(this.camera);
     this.bees?.updateDetail(this.player.eye);
+    this.statue?.update(this.player.eye);
     this.caps?.update(this.player.eye, this.clock.day);
     this.props?.update(this.player.feet);
     this.village?.update(dt, this.player.eye, this.player.feet, this.animTime, this.sky.tod.dayFactor);

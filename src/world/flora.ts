@@ -226,8 +226,10 @@ export function placeMoonCaps(t: TerrainData, trees: TreeSet, count = 28): Spot[
     if (ok(x, z)) candidates.push({ x, y: 0, z });
   }
 
-  // Take them in a shuffled order, keeping each a few strides from the last ones chosen.
-  const order = candidates.map((_, i) => i).sort((a, b) => hash2(a, 9, WORLD_SEED + 64) - hash2(b, 9, WORLD_SEED + 64));
+  // Take them in a shuffled order, keeping each a few strides from the last ones chosen. (The order hangs on
+  // where each candidate is, not on its place in the list, so a change to the trees elsewhere moves none of them.)
+  const shuffle = candidates.map((c) => hash2(Math.round(c.x * 4), Math.round(c.z * 4), WORLD_SEED + 64));
+  const order = candidates.map((_, i) => i).sort((a, b) => shuffle[a]! - shuffle[b]!);
   const out: Spot[] = [];
   for (const i of order) {
     const c = candidates[i]!;
@@ -296,7 +298,9 @@ export function placeHives(t: TerrainData, trees: TreeSet, count = 5): HiveSpot[
     if (pathSdf(x, z) < 4 || creekDistanceAt(t, x, z) < 9) continue;
     candidates.push(i);
   }
-  candidates.sort((a, b) => hash2(a, 3, WORLD_SEED + 70) - hash2(b, 3, WORLD_SEED + 70));
+  // In an order that hangs on where each tree stands, so a change to the trees elsewhere moves no hive.
+  const shuffle = new Map(candidates.map((i) => [i, hash2(Math.round(trees.x[i]! * 4), Math.round(trees.z[i]! * 4), WORLD_SEED + 70)]));
+  candidates.sort((a, b) => shuffle.get(a)! - shuffle.get(b)!);
   const out: HiveSpot[] = [];
   const trunk = { x: 0, y: 0, z: 0, r: 0 };
   const w = { x: 0, y: 0, z: 0 };

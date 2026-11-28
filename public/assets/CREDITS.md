@@ -6,7 +6,7 @@ Everything listed here today is built by the scripts in `tools/assets/` from pac
 
 The exception is the characters made with VRoid Studio, listed in a section of their own below. They are not CC0 and not GPL: they contain meshes and textures belonging to pixiv Inc., used under pixiv's conditions of use, and may be shared free of charge under those conditions only (never as CC0, never sold as model files, never as data for a character-creation tool).
 
-## Anime characters made with VRoid Studio (`characters/`)
+## Anime characters made with VRoid Studio (`characters/`, and Aleric's statue in `statue/`)
 
 These files are **not CC0 and not under the GPL**. Each character was made by the Eastfar authors in VRoid Studio 2.17.0 from its preset body, face, hair and clothing items, which belong to pixiv Inc. and are used under the [VRoid Studio Guidelines](https://vroid.com/en/studio/guidelines) (edited 21 December 2023; checked on 27 November 2026): preset items may be used in games, also commercially, where no special clause is shown for them, and none was shown for any item used here. No sample avatar and no item from another creator was used. The clothing colours were repainted by code (`tools/assets/paint-vroid.mjs`) and imported into VRoid Studio; the exported VRM files were cut down, re-skinned and re-packed for the game by `tools/assets/build-vrm.mjs`. The VRM files' own permission settings are left at VRoid Studio's most restrictive defaults and point to the repository's `README.md`.
 
@@ -23,6 +23,7 @@ You may share these files free of charge with the game. You may not mark them or
 | `elder.glb`, `elder.webp` | Maelin | Base body and face set; long straight hair with a parted fringe; hooded capelet (Hoodie template), long dress, long gloves worn as sleeves, tights, lace-up boots (recoloured) | the Eastfar authors | as above |
 | `child.glb`, `child.webp` | Pip | Base body (child's proportions) and face set; long twin-tail hair set with a blunt fringe; long-sleeved shirt and trousers, with stripes and denim overalls painted on, lace-up boots (recoloured) | the Eastfar authors | as above |
 | `arms_vroid.glb`, `arms_vroid.webp` | (the player's arm) | Dorrie Haywell's right arm and hand (shirt sleeve, recoloured blue; base body), with the fingers posed as a fist and as a grip | the Eastfar authors | as above |
+| `../statue/aleric.glb`, `../statue/aleric.webp` | Aleric (the stone statue in the meadow) | Masc base body and face set, with stronger brows; short layered hair set; a long high-necked coat and an open long coat made from VRoid Studio's templates, trousers, long boots; posed and baked as a statue by `tools/assets/build-vrm.mjs` (the circlet is added by that script; the staff and plinth are shaped in code and are GPL like the rest of the code) | the Eastfar authors | as above |
 | `anims_vroid.glb` | (animations) | The packs' animations below (Quaternius, CC0 1.0), carried over to the VRoid skeleton | the Eastfar authors | CC0 1.0 |
 
 Each row's list of items is a summary; the exact presets, colours and settings are recorded with each character in `docs/ANIME-CAST.md` ("How the cast was made"). The scarecrows are still the packs' figures listed in the next section (drawn with the same cel shading); the packs' arm (`arms.glb`) is kept as the fallback when no VRoid arm is built.

@@ -36,4 +36,4 @@ The game was built in a cloud sandbox with no GPU, and the tools are set up for 
 
 ## Git
 
-Work is pushed to `main`; each push deploys to GitHub Pages via `.github/workflows/deploy.yml`. A large change to how the characters look (a new cast member, a different style) goes on a branch until the owner has seen it.
+Work is pushed to `main`; each push deploys to GitHub Pages via `.github/workflows/deploy.yml`. New characters and changes to how characters look go to `main` like any other finished, verified work: the owner decided on 27 November 2026 that they no longer wait for the owner to see them first. Show the owner pictures after pushing.

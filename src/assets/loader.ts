@@ -387,3 +387,48 @@ export async function loadArmAssets(): Promise<ArmAssets> {
   const grip = (file.scene.userData.grip ?? [0, 0, -0.1]) as [number, number, number];
   return { fist: found.get('fist')!, grip: found.get('grip')!, gripAt: new THREE.Vector3(...grip), ...(texture ? { texture: colourTexture(texture) } : {}) };
 }
+
+export interface StatueAssets {
+  /** The figure in full detail, and plainly for far off: position, normal, uv, and colour = [how much of its painting shows, how open to the sky, 0, 1]. */
+  near: THREE.BufferGeometry;
+  far: THREE.BufferGeometry;
+  /** Its atlas: what is painted on it (read as carving and weathering) and its cut-out shapes. */
+  texture: THREE.Texture;
+  /** Where the right hand closes round the staff, the top of the head and the soles of the feet; metres, the figure facing +z. */
+  grip: THREE.Vector3;
+  head: THREE.Vector3;
+  top: number;
+  sole: number;
+}
+
+/** A statue made from a VRoid character by tools/assets/build-vrm.mjs (buildStatue): Aleric's. */
+export async function loadStatueAssets(id = 'aleric'): Promise<StatueAssets> {
+  const [file, texture] = await Promise.all([gltfLoader().loadAsync(assetUrl(`statue/${id}.glb`)), new THREE.TextureLoader().loadAsync(assetUrl(`statue/${id}.webp`))]);
+  file.scene.updateMatrixWorld(true);
+  const found = new Map<string, THREE.BufferGeometry>();
+  file.scene.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const src = mesh.geometry;
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', floats(src.getAttribute('position'), 3));
+    geometry.setAttribute('normal', floats(src.getAttribute('normal'), 3));
+    geometry.setAttribute('uv', floats(src.getAttribute('uv'), 2));
+    geometry.setAttribute('color', floats(src.getAttribute('color'), 4));
+    geometry.setIndex(src.getIndex());
+    // The file's positions are packed; the node's own transform unpacks them into metres.
+    geometry.applyMatrix4(mesh.matrixWorld);
+    geometry.computeBoundingSphere();
+    found.set(mesh.name === 'near' || mesh.name === 'far' ? mesh.name : (mesh.parent?.name ?? ''), geometry);
+  });
+  const extras = file.scene.userData as { grip: number[]; head: number[]; top: number; sole: number };
+  return {
+    near: found.get('near')!,
+    far: found.get('far')!,
+    texture: colourTexture(texture),
+    grip: new THREE.Vector3(...(extras.grip as [number, number, number])),
+    head: new THREE.Vector3(...(extras.head as [number, number, number])),
+    top: extras.top,
+    sole: extras.sole,
+  };
+}
