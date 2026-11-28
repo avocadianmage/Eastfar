@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * The sky dome (gradient, sun, moon, stars, clouds), the sun/moon light with
- * its shadow, soft sky light, the thin haze that ties distance into the sky,
- * and the ground mist that lies in the meadow.
+ * its shadow, soft sky light, and the fog and ground mist that tie distance
+ * into the sky.
  */
 import {
   Fn,
   abs,
   cameraPosition,
-  clamp,
   dot,
   exp,
   float,
@@ -35,7 +34,6 @@ import {
   vec3,
 } from 'three/tsl';
 import * as THREE from 'three/webgpu';
-import { MEADOW } from '../world/layout';
 import { env } from './env';
 import { moonSurface } from './moonSurface';
 import type { Quality } from './quality';
@@ -63,31 +61,6 @@ function moonTexture(): THREE.DataTexture {
   tex.generateMipmaps = true;
   tex.needsUpdate = true;
   return tex;
-}
-
-/** The ground mist fills the meadow's hollow: all of it within this distance of its middle (m)... */
-const MIST_FULL = MEADOW.radius * 0.65;
-/** ...thinning to nothing by this distance, a little past the meadow's rim. */
-const MIST_GONE = MEADOW.radius * 1.3;
-/** How many pieces the stretch of a view ray inside the mist is cut into, to follow how it thins. */
-const MIST_STEPS = 6;
-/** How much moonlight the mist gathers after dark, so it shows as pale mist and not just as darkness. */
-const MIST_GLOW = 0.3;
-
-/**
- * Where a view ray from the camera (direction rel / dist, length dist) crosses the round the mist fills,
- * seen from above: o and e are the camera and the ray's direction on the ground, t0..t1 the stretch inside.
- */
-function mistStretch(rel: THREE.Node<'vec3'>, dist: THREE.Node<'float'>) {
-  const o = cameraPosition.xz.sub(vec2(MEADOW.x, MEADOW.z)).toVar();
-  const e = rel.xz.div(max(dist, 0.001)).toVar();
-  const a = max(dot(e, e), 0.000001);
-  const b = dot(o, e);
-  const disc = b.mul(b).sub(a.mul(dot(o, o).sub(MIST_GONE * MIST_GONE)));
-  const root = sqrt(max(disc, 0));
-  const t0 = clamp(b.negate().sub(root).div(a), 0, dist).toVar();
-  const t1 = select(disc.greaterThan(0), clamp(b.negate().add(root).div(a), 0, dist), t0).toVar();
-  return { o, e, t0, t1 };
 }
 
 function buildSkyNode(noise: THREE.Texture, moonTex: THREE.Texture) {
@@ -172,45 +145,23 @@ function buildFogNode(noise: THREE.Texture) {
     // Thin haze everywhere: simple aerial perspective.
     const haze = dist.mul(env.hazeDensity);
 
-    // Mist lies only in the meadow's hollow: thickest over its middle, thinning with height above the
-    // meadow floor and with distance from the middle, so from outside it shows as mist in the distance.
-    // First the stretch of the view ray that crosses the round the mist fills...
-    const { o, e, t0, t1 } = mistStretch(rel, dist);
-    const h = t1.sub(t0).div(MIST_STEPS).toVar();
-    // ...then, piece by piece, the mist met along it: exact for how it thins with height, and taking how
-    // it thins toward the meadow's edge from the middle of each piece.
-    const k = rdY.mul(env.mistFalloff);
-    const kSafe = select(abs(k).lessThan(0.0002), float(0.0002), k).toVar();
-    const camTerm = exp(clamp(cameraPosition.y.sub(env.mistBase), -6, 60).mul(env.mistFalloff).negate());
-    const along = (t: THREE.Node<'float'>) => exp(min(kSafe.mul(t).negate(), 6));
-    let sum: THREE.Node<'float'> = float(0);
-    let before = along(t0);
-    for (let i = 0; i < MIST_STEPS; i++) {
-      const after = along(t0.add(h.mul(i + 1)));
-      const mid = o.add(e.mul(t0.add(h.mul(i + 0.5))));
-      const fill = float(1).sub(smoothstep(MIST_FULL, MIST_GONE, length(mid)));
-      sum = sum.add(fill.mul(before.sub(after)));
-      before = after;
-    }
+    // Mist that hugs the ground and thins with height, integrated along the view ray.
+    const t = rdY.mul(env.mistFalloff).toVar();
+    const tSafe = select(abs(t).lessThan(0.0002), float(0.0002), t);
+    const camTerm = exp(min(max(cameraPosition.y.sub(env.mistBase), -6), 60).mul(env.mistFalloff).negate());
+    const integral = float(1).sub(exp(max(dist.mul(tSafe), -6).negate())).div(tSafe);
     // Slow drifting patches so the mist is never a flat sheet.
     const drift = env.windDir.mul(env.time.mul(0.012));
     const patch = texture(noise, positionWorld.xz.mul(0.0045).add(drift)).a.mul(1.3).add(0.35);
-    const mist = env.mistDensity.mul(camTerm).mul(sum.div(kSafe)).mul(patch);
+    const mist = env.mistDensity.mul(camTerm).mul(integral).mul(patch);
 
     return float(1).sub(exp(haze.add(mist).negate()));
   })();
 
   const color = Fn(() => {
-    const rel = positionWorld.sub(cameraPosition).toVar();
-    const dist = length(rel).toVar();
-    const towardLight = pow(max(dot(rel.div(max(dist, 0.001)), env.lightDir), 0), 6).mul(0.9);
-    const base = mix(env.fogColor, env.fogLightColor, towardLight);
-    // After dark the mist is paler than the haze, lit by the moon. Roughly how much of the fog met is
-    // mist, from how far the ray runs through the mist's round.
-    const { t0, t1 } = mistStretch(rel, dist);
-    const mist = env.mistDensity.mul(t1.sub(t0)).mul(0.6);
-    const share = mist.div(mist.add(env.hazeDensity.mul(dist)).add(0.0001));
-    return base.add(env.lightColor.mul(share.mul(float(1).sub(env.dayFactor)).mul(MIST_GLOW)));
+    const rd = normalize(positionWorld.sub(cameraPosition));
+    const towardLight = pow(max(dot(rd, env.lightDir), 0), 6).mul(0.9);
+    return mix(env.fogColor, env.fogLightColor, towardLight);
   })();
 
   return fog(color, factor);
@@ -269,7 +220,7 @@ export class Sky {
   }
 
   /** Update every light and sky colour for the given time of day. */
-  update(hour: number, eye: THREE.Vector3, groundY: number): void {
+  update(hour: number, eye: THREE.Vector3, groundY: number, dt: number): void {
     // The sky changes very slowly (a full day takes six hours), so the palette is
     // only recomputed every couple of game seconds; following the player is every frame.
     if (Math.abs(hour - this.paletteHour) > 0.0006) {
@@ -277,6 +228,11 @@ export class Sky {
       this.applyPalette(hour);
     }
     const t = this.tod;
+
+    // Mist pools around the level of the ground the player stands on.
+    const targetBase = groundY - 0.5;
+    const k = dt > 0 ? 1 - Math.exp(-dt * 0.6) : 1;
+    env.mistBase.value += (targetBase - env.mistBase.value) * k;
 
     this.lightDirSmoothed.set(t.lightDir[0], t.lightDir[1], t.lightDir[2]);
     // Keep the light from going fully horizontal; shadows would stretch forever.

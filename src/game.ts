@@ -46,7 +46,7 @@ import { CreekWater } from './water/creek';
 import { COBBLED_WITHIN, REGION_LABELS, VILLAGE, playableSdf, regionAt, type RegionName } from './world/layout';
 import { Physics } from './world/physics';
 import { buildingAt } from './world/buildings';
-import { MASK2_FOREST, MASK2_PATH, MASK_GRASS, bakeTerrain, creekDistanceAt, heightAt, mask2At, maskAt, meadowFloor, normalAt, waterDepthAt, type TerrainData } from './world/terrainData';
+import { MASK2_FOREST, MASK2_PATH, MASK_GRASS, bakeTerrain, creekDistanceAt, heightAt, mask2At, maskAt, normalAt, waterDepthAt, type TerrainData } from './world/terrainData';
 
 export interface GameState {
   x: number;
@@ -173,8 +173,6 @@ export class Game {
     this.textures = createWorldTextures(this.terrain);
     const skip = this.params.skip;
     this.sky = new Sky(this.scene, this.textures.noise, this.quality, skip);
-    // The ground mist lies in the meadow's hollow, on its floor.
-    env.mistBase.value = meadowFloor(this.terrain) - 0.5;
     if (!skip.has('terrain')) this.terrainMesh = new TerrainMesh(this.scene, this.terrain, this.textures, this.quality, TREE_FAR);
     if (!skip.has('grass')) this.grass = new Grass(this.scene, this.terrain, this.textures, this.quality);
     if (!skip.has('water')) this.water = new CreekWater(this.scene, this.terrain, this.textures);
@@ -374,7 +372,7 @@ export class Game {
     env.time.value = this.animTime;
     env.viewPos.value.copy(eye);
     env.playerPos.value.copy(feet);
-    this.sky.update(this.clock.hour, eye, heightAt(this.terrain, feet.x, feet.z));
+    this.sky.update(this.clock.hour, eye, heightAt(this.terrain, feet.x, feet.z), dt);
 
     // Weather drifts slowly: wind rises and falls, cloud thickens and clears over the hours.
     const hours = this.clock.day * 24 + this.clock.hour;

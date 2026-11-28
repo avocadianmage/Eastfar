@@ -61,9 +61,8 @@ const P = {
   ambientGround: ['#17224a', '#1a2548', '#3a3040', '#5a4a3c', '#5c6040', '#566a3a', '#566a3a'].map(hex),
   ambientGroundIntensity: [0.24, 0.28, 0.46, 0.52, 0.56, 0.62, 0.62],
   fog: ['#101a33', '#1c2747', '#c98c72', '#eec392', '#dfe1d6', '#c6ddf0', '#bedaf3'].map(hex),
-  haze: [0.0006, 0.0006, 0.0007, 0.0007, 0.0005, 0.00035, 0.0003],
-  // The ground mist, which lies only in the meadow: thickest at night and dawn, a soft veil at noon.
-  mist: [0.016, 0.017, 0.016, 0.0145, 0.008, 0.004, 0.003],
+  haze: [0.00115, 0.00115, 0.0013, 0.0012, 0.0008, 0.0005, 0.00042],
+  mist: [0.013, 0.014, 0.0135, 0.0115, 0.005, 0.0013, 0.0009],
 };
 
 /** Dawn is pinker and mistier than dusk. */
