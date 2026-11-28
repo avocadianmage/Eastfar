@@ -77,7 +77,7 @@ test('bee swarms sting, can be broken up with bare hands, and count toward the q
   expect((await api<SwarmInfo[]>(page, 'return api.swarms();')).filter((s) => s.alive).length).toBe(4);
 });
 
-test('bees go home into their hives at night and do not come out', async ({ page }) => {
+test('no bees are out at night', async ({ page }) => {
   await boot(page, 'time=22:00');
   const hives = await api<HiveInfo[]>(page, 'return api.hives();');
   const h = hives[0]!;

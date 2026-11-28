@@ -2,8 +2,8 @@
 /**
  * Wild bee swarms in the meadow. Each swarm hangs about a wild hive that hangs
  * from a bough of one of the meadow's trees; come too close and it gives chase
- * and stings. A few blows break it up. At dusk the bees go home into the hive
- * and stay in until dawn. All swarms are drawn as one instanced
+ * and stings. A few blows break it up. At night there are no bees out (they
+ * are in their hives) until dawn. All swarms are drawn as one instanced
  * mesh of tiny darting specks whose motion is computed on the GPU.
  */
 import { Fn, cameraWorldMatrix, cos, float, floor, hash, instanceIndex, length, positionGeometry, sin, uniformArray, uv, vec3, vec4, smoothstep } from 'three/tsl';
@@ -35,9 +35,9 @@ export class Swarm implements Hittable {
   readonly home = new THREE.Vector3();
   /** Which way the hive's bough reaches (unit, on the ground plane): the swarm keeps to that side of the trunk. */
   readonly out = new THREE.Vector3(0, 0, 1);
-  /** The hive's entrance, which the bees go in and out by. */
-  readonly door = new THREE.Vector3();
-  /** In the hive for the night: not seen, not heard, and nothing to hit. */
+  /** Where the swarm keeps to at rest: about the hive, on the open side of the trunk. */
+  readonly rest = new THREE.Vector3();
+  /** In the hive for the night: not drawn, not heard, and nothing to hit. */
   inside = false;
   readonly radius = 0.95;
   health = SWARM_HEALTH;
@@ -85,22 +85,17 @@ export class Swarm implements Hittable {
     }
     const pos = this.position;
     if (night) {
-      // Home for the night: whatever they were about, they fly back, close up and crawl in.
-      if (this.inside) return;
-      this.state = 'return';
+      // No bees out at night: the swarm is simply gone until dawn, whatever it was about.
+      this.inside = true;
+      this.state = 'idle';
       this.scatter = 0;
-      const d = pos.distanceTo(this.door);
-      pos.addScaledVector(this.owner.tmp.subVectors(this.door, pos).normalize(), Math.min(d, 3.4 * dt));
-      this.spread += (0.1 - this.spread) * (1 - Math.exp(-dt * 3));
-      if (d < 0.25) this.inside = true;
+      pos.copy(this.rest);
       return;
     }
     if (this.inside) {
       // Morning: out they come.
       this.inside = false;
-      this.state = 'idle';
-      pos.copy(this.door);
-      this.spread = 0.15;
+      this.spread = 0.3;
     }
     const toPlayer = pos.distanceTo(target);
     const fromHome = Math.hypot(pos.x - this.home.x, pos.z - this.home.z);
@@ -108,12 +103,8 @@ export class Swarm implements Hittable {
     if (this.state === 'idle') {
       // Busy about the hive, drifting round it on the open side of the trunk.
       const i = this.index;
-      const h = this.home;
-      pos.set(
-        h.x + this.out.x * 0.35 + Math.sin(time * 0.41 + i * 2.1) * 0.6,
-        h.y - 0.05 + Math.sin(time * 0.7 + i) * 0.22,
-        h.z + this.out.z * 0.35 + Math.cos(time * 0.53 + i * 1.3) * 0.6,
-      );
+      const f = this.rest;
+      pos.set(f.x + Math.sin(time * 0.41 + i * 2.1) * 0.6, f.y + Math.sin(time * 0.7 + i) * 0.22, f.z + Math.cos(time * 0.53 + i * 1.3) * 0.6);
       if (toPlayer < AGGRO_RANGE) this.state = 'chase';
     } else if (this.state === 'chase') {
       if (fromHome > LEASH || toPlayer > LEASH) this.state = 'return';
@@ -131,7 +122,7 @@ export class Swarm implements Hittable {
         this.stingTimer = Math.min(STING_EVERY * 0.6, this.stingTimer + dt * 0.5);
       }
     } else {
-      const dest = this.owner.tmp.set(this.home.x + this.out.x * 0.35, this.home.y, this.home.z + this.out.z * 0.35);
+      const dest = this.owner.tmp.copy(this.rest);
       const d = pos.distanceTo(dest);
       if (d < 0.6) this.state = 'idle';
       else pos.addScaledVector(dest.sub(pos).normalize(), Math.min(d, 3.4 * dt));
@@ -158,7 +149,7 @@ export class Swarm implements Hittable {
     this.state = 'idle';
     this.spread = 0.72;
     this.scatter = 0;
-    this.position.set(this.home.x + this.out.x * 0.35, this.home.y, this.home.z + this.out.z * 0.35);
+    this.position.copy(this.rest);
   }
 }
 
@@ -206,8 +197,7 @@ export class BeeSwarms {
       const s = new Swarm(i, this);
       s.home.set(h.x, midY, h.z);
       s.out.set(h.dirX, 0, h.dirZ);
-      // The entrance is on the side facing the way the bough reaches, a little below the hive's middle.
-      s.door.set(h.x + h.dirX * 0.27, midY - 0.15, h.z + h.dirZ * 0.27);
+      s.rest.set(h.x + h.dirX * 0.35, midY - 0.05, h.z + h.dirZ * 0.35);
       s.respawn();
       this.swarms.push(s);
     });
