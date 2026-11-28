@@ -216,7 +216,7 @@ export class Game {
         this.npcs = new Npcs(this.scene, this.figures, this.figureMaterial, this.terrain, this.physics, this.clock.isNight);
       }
       if (!skip.has('bees')) {
-        this.bees = new BeeSwarms(this.scene, built, this.terrain);
+        this.bees = new BeeSwarms(this.scene, this.terrain, this.textures, this.trees?.set ?? null, this.physics);
         content.push('bees');
       }
       if (this.figures && this.figureMaterial && !skip.has('scarecrows')) {
@@ -347,6 +347,8 @@ export class Game {
     this.grass?.update(this.camera);
     this.trees?.update(this.camera, dt);
     this.flowers?.update(this.camera);
+    this.bees?.updateDetail(this.player.eye);
+    this.caps?.update(this.player.eye, this.clock.day);
     this.props?.update(this.player.feet);
     this.village?.update(dt, this.player.eye, this.player.feet, this.animTime, this.sky.tod.dayFactor);
     this.npcs?.update(dt, this.clock.isNight, this.player.feet, this.camera);
@@ -514,6 +516,8 @@ export class Game {
       },
       swarms: () => (this.bees?.swarms ?? []).map((b) => ({ x: b.position.x, y: b.position.y, z: b.position.z, alive: b.alive, health: b.health, state: b.state })),
       caps: () => (this.caps?.spots ?? []).map((c, i) => ({ x: c.x, z: c.z, available: this.caps!.available(i, this.clock.day) })),
+      /** Where each wild hive hangs (the top of the hive, under its bough) and which way its bough reaches. */
+      hives: () => (this.bees?.hives ?? []).map((h) => ({ x: h.x, y: h.y, z: h.z, dirX: h.dirX, dirZ: h.dirZ, ground: heightAt(this.terrain, h.x, h.z) })),
       hurt: (amount: number) => this.gameplay.hurt(amount),
       scarecrows: () => (this.scarecrows?.all ?? []).map((s) => ({ id: s.def.id, x: s.feet.x, z: s.feet.z, state: s.state, health: s.health, walks: s.def.walks, clip: s.figure.clip })),
       crows: () => (this.crows?.all ?? []).map((c) => ({ x: c.position.x, y: c.position.y, z: c.position.z, state: c.state })),

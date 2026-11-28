@@ -65,10 +65,10 @@ export const QUESTS: readonly QuestDef[] = [
     summary: 'Wild bees have gone bad-tempered in the meadow. Break up the angry swarms.',
     offer: [
       'They are not my bees, before you ask. Mine are gentle. These are wild ones, come down from the hills in a temper, and they are chasing my girls off the clover.',
-      'Break up the swarms for me. Three of them, out among the flowers. You will hear them before you see them.',
+      'They have hung their nests from the meadow trees, five that I know of. Break up the swarms for me. Three will do. You will hear them before you see them.',
     ],
     accept: 'Swing at the thick of them and do not stand still. And mind your eyes.',
-    progress: 'Three swarms, out in the meadow flowers. You have not finished, by the look of your face. Or by the lack of stings on it.',
+    progress: 'Three swarms, round the nests in the meadow trees. You have not finished, by the look of your face. Or by the lack of stings on it.',
     complete: ['Listen to that. Quiet. Proper, working quiet. Here, for your trouble, and a little something sweet for the stings.'],
     objectives: [{ type: 'kill', target: 'bee_swarm', count: 3, label: 'Break up bee swarms' }],
     rewards: { coins: 20, items: [['honeycomb', 3]] },
@@ -80,8 +80,8 @@ export const QUESTS: readonly QuestDef[] = [
     needs: 'mushrooms',
     summary: 'Gather six Moonlight Caps from the meadow. They glow after dark, which makes them far easier to find.',
     offer: [
-      'I need Moonlight Caps. Little pale mushrooms, grow in the damp along the creek and under the meadow trees.',
-      'By day you could walk past a hundred. After dark they glow like spilled milk. Six will do. Go at night, and take care where you put your feet.',
+      'I need Moonlight Caps. Little blue mushrooms flecked with white, like a scrap of the night sky. They grow in the damp along the creek and under the meadow trees.',
+      'By day they hide in the long grass. After dark their gills glow like spilled milk. Six will do. Go at night, and take care where you put your feet.',
     ],
     accept: 'Six, mind. Whole ones. If you are tired of waiting for dark, a bed will pass the hours.',
     progress: 'Six Moonlight Caps. Along the creek and under the trees, and only worth hunting at night.',

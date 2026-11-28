@@ -20,11 +20,18 @@ export const WORLD_SEED = 20261;
 export const VILLAGE = { x: 0, z: 0, radius: 95 } as const;
 /** Roads and yards within this many metres of the village centre are cobbled; beyond it they are earth. */
 export const COBBLED_WITHIN = 74;
-export const MEADOW = { x: 40, z: -330, radius: 205 } as const;
+/**
+ * Aleric's Meadow: a glade about 200 m across, ringed close by woods, with the creek winding
+ * through it. Its rim wavers in and out (see meadowSdf), so it has bays and points of woodland
+ * rather than the line of a circle.
+ */
+export const MEADOW = { x: 44, z: -318, radius: 100 } as const;
 export const FARMS = { x: 520, z: 30, halfX: 330, halfZ: 260, corner: 60 } as const;
 
-/** Aleric's statue, tucked in a dell at the meadow's north-west edge. */
-export const STATUE = { x: -100, z: -435 } as const;
+/** Aleric's statue, tucked in a dell in the woods at the meadow's north-west edge. */
+export const STATUE = { x: -40, z: -386 } as const;
+/** How far the statue's dell reaches from the statue (metres): a pocket of walkable ground off the meadow. */
+export const STATUE_DELL = 13;
 /** The old gate where the East Road meets the forest. */
 export const EAST_GATE = { x: 852, z: 20 } as const;
 /** Where a new game begins: the village green, facing the road east. */
@@ -87,13 +94,62 @@ export function farmsSdf(x: number, z: number): number {
 }
 
 /**
+ * Signed distance to the edge of Aleric's Meadow (negative inside). The edge swings up to about
+ * 12 m in and out of a circle as it goes round, in a few slow waves.
+ */
+export function meadowSdf(x: number, z: number): number {
+  const dx = x - MEADOW.x;
+  const dz = z - MEADOW.z;
+  const a = Math.atan2(dz, dx);
+  const r = MEADOW.radius + 8 * Math.sin(3 * a + 0.7) + 4 * Math.sin(5 * a + 2.1);
+  return Math.hypot(dx, dz) - r;
+}
+
+/** The lane north from the village to the meadow, along the north path: [x, z] points. */
+const LANE: ReadonlyArray<readonly [number, number]> = [
+  [5, -40],
+  [9, -70],
+  [14, -110],
+  [22, -160],
+  [30, -215],
+];
+/** Half the lane's width (metres): woods close in on either side. */
+const LANE_HALF = 30;
+/** Half the width of the walk down the creek from the meadow to the East Road. */
+const CREEKSIDE_HALF = 20;
+
+/**
+ * Signed distance to the ways between the village and the meadow: the lane along the north path,
+ * and a walk beside the creek where it leaves the meadow and runs south-east to the East Road,
+ * with woods between them.
+ */
+export function approachSdf(x: number, z: number): number {
+  // Nothing of either lies outside this box; skip the sums there (this runs for every sample of the land).
+  if (x < -40 || x > 170 || z < -280 || z > 0) return 1e6;
+  let d = 1e6;
+  for (let i = 0; i < LANE.length - 1; i++) {
+    const a = LANE[i]!;
+    const b = LANE[i + 1]!;
+    d = Math.min(d, sdCapsule(x, z, a[0], a[1], b[0], b[1], LANE_HALF));
+  }
+  // The creek's own control points from where it leaves the meadow down to the road.
+  for (let i = 8; i < 12; i++) {
+    const a = CREEK_POINTS[i]!;
+    const b = CREEK_POINTS[i + 1]!;
+    d = Math.min(d, sdCapsule(x, z, a[0], a[1], b[0], b[1], CREEKSIDE_HALF));
+  }
+  return d;
+}
+
+/**
  * Signed distance to the edge of the walkable land: negative inside, positive
  * outside. Hills, thick woods and a soft invisible wall keep the player in.
  */
 export function playableSdf(x: number, z: number): number {
   let d = sdCircle(x, z, VILLAGE.x, VILLAGE.z, VILLAGE.radius + 20);
-  d = Math.min(d, sdCircle(x, z, MEADOW.x, MEADOW.z, MEADOW.radius));
-  d = Math.min(d, sdCapsule(x, z, 0, -50, 30, -200, 80));
+  d = Math.min(d, meadowSdf(x, z));
+  d = Math.min(d, sdCircle(x, z, STATUE.x, STATUE.z, STATUE_DELL));
+  d = Math.min(d, approachSdf(x, z));
   d = Math.min(d, farmsSdf(x, z));
   d = Math.min(d, sdCapsule(x, z, 60, 0, 220, 10, 95));
   return d;
@@ -109,7 +165,7 @@ export type RegionName = 'village' | 'meadow' | 'farms' | 'wilds';
 export function regionAt(x: number, z: number): RegionName {
   if (Math.hypot(x - VILLAGE.x, z - VILLAGE.z) < VILLAGE.radius + 10) return 'village';
   if (farmsSdf(x, z) < 0) return 'farms';
-  if (Math.hypot(x - MEADOW.x, z - MEADOW.z) < MEADOW.radius + 10 || sdCapsule(x, z, 0, -50, 30, -200, 80) < 0) {
+  if (meadowSdf(x, z) < 10 || approachSdf(x, z) < 0 || Math.hypot(x - STATUE.x, z - STATUE.z) < STATUE_DELL + 10) {
     return 'meadow';
   }
   return 'wilds';

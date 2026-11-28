@@ -38,6 +38,7 @@ import * as THREE from 'three/webgpu';
 import { mulberry32 } from '../core/rng';
 import { TREE_CONIFER, placeTrees, type TreeSet } from '../world/flora';
 import { playableSdf } from '../world/layout';
+import { BROADLEAF_BLOBS, BROADLEAF_TRUNK } from '../world/treeShape';
 import type { Physics } from '../world/physics';
 import type { TerrainData } from '../world/terrainData';
 import { env, lanternLight } from '../render/env';
@@ -175,17 +176,6 @@ const PINE_LIGHT = lin('#3b7449');
 
 const BROADLEAF_HEIGHT = 9.4;
 const BROADLEAF_CROWN = new THREE.Vector3(0, 5.2, 0);
-/** Leaf masses of the detailed broadleaf: [x, y, z, radius]. A wide, low, spreading crown. */
-const BROADLEAF_BLOBS: [number, number, number, number][] = [
-  [0, 6.4, 0, 2.6],
-  [2.1, 5.1, 0.7, 2.1],
-  [-1.9, 5.3, 1.3, 2.2],
-  [0.4, 4.9, -2.2, 2.1],
-  [-1.2, 7.3, -0.7, 1.8],
-  [1.3, 7.0, 1.4, 1.7],
-  [-2.6, 4.4, -1.2, 1.6],
-  [2.4, 4.3, -1.5, 1.5],
-];
 
 function broadleaf(level: 0 | 1 | 2): THREE.BufferGeometry {
   const H = BROADLEAF_HEIGHT;
@@ -226,7 +216,7 @@ const BROADLEAF_BLOBS_MID: [number, number, number, number][] = [
  * Every vertex of a card stores the card's centre; `aCorner` says which way
  * to push it outward.
  */
-function leafCards(blobs: [number, number, number, number][], perBlob: number, sizeMul: number): THREE.BufferGeometry {
+function leafCards(blobs: readonly (readonly [number, number, number, number])[], perBlob: number, sizeMul: number): THREE.BufferGeometry {
   const rnd = mulberry32(4411);
   const pos: number[] = [];
   const corner: number[] = [];
@@ -349,10 +339,12 @@ function broadleafWood(): THREE.BufferGeometry {
   const H = BROADLEAF_HEIGHT;
   const rnd = mulberry32(2203);
   const parts: THREE.BufferGeometry[] = [];
-  const top = new THREE.Vector3(0.12, 4.7, -0.08);
-  const trunkBend = new THREE.Vector3(0.1, 0, 0.06);
-  parts.push(limb(new THREE.Vector3(0, -0.2, 0), top, 0.38, 0.17, 8, 4, trunkBend, H, 0));
-  const onTrunk = (y: number) => new THREE.Vector3().lerpVectors(new THREE.Vector3(0, -0.2, 0), top, (y + 0.2) / (top.y + 0.2)).addScaledVector(trunkBend, Math.sin((Math.PI * (y + 0.2)) / (top.y + 0.2)));
+  const T = BROADLEAF_TRUNK;
+  const base = new THREE.Vector3(...T.base);
+  const top = new THREE.Vector3(...T.top);
+  const trunkBend = new THREE.Vector3(...T.bend);
+  parts.push(limb(base, top, T.r0, T.r1, 8, 4, trunkBend, H, 0));
+  const onTrunk = (y: number) => new THREE.Vector3().lerpVectors(base, top, (y - base.y) / (top.y - base.y)).addScaledVector(trunkBend, Math.sin((Math.PI * (y - base.y)) / (top.y - base.y)));
   BROADLEAF_BLOBS.forEach(([bx, by, bz, br], i) => {
     const centre = new THREE.Vector3(bx, by, bz);
     const out = new THREE.Vector3(bx, 0, bz);
@@ -385,7 +377,7 @@ function broadleafWood(): THREE.BufferGeometry {
  * crown's shadow: the shadow map cannot show a sprig's detail, so a sixth as
  * many cast a shadow that looks the same.
  */
-function leafSprigs(blobs: [number, number, number, number][], outer = 34, inner = 12, crossed = true, sizeMul = 1): THREE.BufferGeometry {
+function leafSprigs(blobs: readonly (readonly [number, number, number, number])[], outer = 34, inner = 12, crossed = true, sizeMul = 1): THREE.BufferGeometry {
   const rnd = mulberry32(8123);
   const pos: number[] = [];
   const uvs: number[] = [];

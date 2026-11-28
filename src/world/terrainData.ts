@@ -8,7 +8,7 @@ import { clamp, fbm2, lerp, smoothstep, valueNoise2 } from '../core/rng';
 import { BRIDGE, BUILDINGS, PATHS, footprintSdf } from './buildings';
 import { buildCreek, type CreekSample } from './creek';
 import { FIELDS, fieldSdf } from './fields';
-import { MEADOW, STATUE, TERRAIN, VILLAGE, WORLD_SEED, eastOpening, farmsSdf, playableSdf } from './layout';
+import { STATUE, TERRAIN, VILLAGE, WORLD_SEED, approachSdf, eastOpening, farmsSdf, meadowSdf, playableSdf } from './layout';
 
 export const MASK_GRASS = 0;
 export const MASK_DIRT = 1;
@@ -289,7 +289,10 @@ export function bakeTerrain(timings?: Record<string, number>): TerrainData {
       const sdf = playable[i]!;
 
       const wVillage = 1 - smoothstep(50, 110, Math.hypot(x - VILLAGE.x, z - VILLAGE.z));
-      const wMeadow = 1 - smoothstep(MEADOW.radius - 50, MEADOW.radius + 30, Math.hypot(x - MEADOW.x, z - MEADOW.z));
+      const msdf = meadowSdf(x, z);
+      const wMeadow = 1 - smoothstep(-35, 20, msdf);
+      // Wildflowers grow in the meadow and nowhere else: right up to its wooded rim, and none past it.
+      const inMeadow = 1 - smoothstep(-10, 3, msdf);
       const wFarm = 1 - smoothstep(-40, 10, farmsSdf(x, z));
       const wWild = smoothstep(5, 70, sdf);
 
@@ -305,15 +308,13 @@ export function bakeTerrain(timings?: Record<string, number>): TerrainData {
       const d = creekDist[i]!;
       const hw = creekHalfWidth[i]!;
       let wet = 0;
-      let flowers = wMeadow > 0 ? wMeadow * smoothstep(-0.05, 0.4, fbm2(x / 30, z / 30, 3, seed + 401)) * 0.9 : 0;
-      flowers += wMeadow * 0.12;
-      flowers = Math.max(flowers, (1 - wVillage) * (1 - wWild) * (1 - wFarm) * 0.1);
+      let flowers = inMeadow > 0 ? inMeadow * (smoothstep(-0.05, 0.4, fbm2(x / 30, z / 30, 3, seed + 401)) * 0.9 + 0.12) : 0;
       if (d < FAR) {
         wet = 1 - smoothstep(hw - 0.4, hw + 2.4, d);
         // Lush, tall growth along the banks; nothing in the water itself.
         const bankBand = smoothstep(hw + 0.2, hw + 2.5, d) * (1 - smoothstep(hw + 5, hw + 14, d));
         grass += bankBand * 0.3;
-        flowers += bankBand * 0.35 * (1 - wWild);
+        flowers += bankBand * 0.35 * inMeadow;
         const dry = smoothstep(hw - 0.1, hw + 0.9, d);
         grass *= dry;
         flowers *= dry;
@@ -371,13 +372,17 @@ export function bakeTerrain(timings?: Record<string, number>): TerrainData {
       const open = eastOpening(x, z);
       const wVillage = 1 - smoothstep(60, 120, Math.hypot(x - VILLAGE.x, z - VILLAGE.z));
       const wFarm = 1 - smoothstep(-30, 20, farmsSdf(x, z));
-      const wMeadow = 1 - smoothstep(MEADOW.radius - 40, MEADOW.radius + 20, Math.hypot(x - MEADOW.x, z - MEADOW.z));
+      const msdf = meadowSdf(x, z);
+      const wMeadow = 1 - smoothstep(-40, 20, msdf);
 
       const grove = wMeadow > 0 ? smoothstep(0.16, 0.4, fbm2(x / 72, z / 72, 3, seed + 900)) : 0;
       let forest = wild * 0.94;
       // Groves gather toward the meadow's rim; a scatter of lone trees everywhere else.
-      const rim = smoothstep(0.35, 0.95, Math.hypot(x - MEADOW.x, z - MEADOW.z) / MEADOW.radius);
+      const rim = smoothstep(-65, -5, msdf);
       forest = Math.max(forest, grove * (0.18 + 0.5 * rim) * wMeadow);
+      // The woods come right up to the meadow's edge, so it is a glade with trees close round it
+      // (but not across the lane and the creekside walk that lead into it).
+      if (msdf > -16 && msdf < 40) forest = Math.max(forest, smoothstep(-16, 4, msdf) * 0.6 * smoothstep(-8, 4, approachSdf(x, z)));
       forest = Math.max(forest, 0.034);
       forest = lerp(forest, 0.014, wFarm * (1 - wild));
       forest = lerp(forest, 0.06, wVillage);
@@ -391,7 +396,7 @@ export function bakeTerrain(timings?: Record<string, number>): TerrainData {
       if (sd < 46) {
         const ring = smoothstep(9, 15, sd) * (1 - smoothstep(30, 46, sd));
         const gap = smoothstep(0.75, 0.93, (sdx * 0.78 + sdz * 0.62) / Math.max(sd, 1e-3));
-        forest = Math.max(forest, ring * 0.9 * (1 - gap));
+        forest = Math.max(forest, ring * 0.78 * (1 - gap));
         forest *= smoothstep(6, 10, sd);
       }
 

@@ -58,7 +58,7 @@ test('a quest can be taken, done and handed in', async ({ page }) => {
   expect(await api<string>(page, 'return api.mode();')).toBe('play');
 
   // Go to the statue.
-  await api(page, 'api.teleport(-96, -433, 240, 5);');
+  await api(page, 'api.teleport(-36, -384, 240, 5);');
   await page.waitForFunction(() => (window as unknown as W).__eastfar.questStatus('old_legend') === 'ready', null, { timeout: 60_000 });
   expect(await api<number>(page, 'return api.count("aleric_token");')).toBe(1);
 

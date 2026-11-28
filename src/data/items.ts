@@ -43,7 +43,7 @@ const defs: ItemDef[] = [
   { id: 'bread', name: 'Heel of Bread', description: 'Yesterday’s loaf. Restores 3 health.', icon: '🍞', stack: 10, value: 3, heal: 3 },
   { id: 'apple', name: 'Apple', description: 'Crisp and a little sour. Restores 2 health.', icon: '🍎', stack: 10, value: 2, heal: 2 },
   { id: 'honeycomb', name: 'Honeycomb', description: 'Dripping and golden. Restores 2 health; the innkeeper pays well for it.', icon: '🍯', stack: 10, value: 6, heal: 2 },
-  { id: 'moon_cap', name: 'Moonlight Cap', description: 'A pale mushroom that glows faintly after dark. The herbalist wants these.', icon: '🍄', stack: 20, value: 4, quest: true },
+  { id: 'moon_cap', name: 'Moonlight Cap', description: 'A deep blue mushroom flecked with white, like a scrap of the night sky. It glows after dark. The herbalist wants these.', icon: '🍄', stack: 20, value: 4, quest: true },
   { id: 'crow_feather', name: 'Crow Feather', description: 'Glossy black, with a blue sheen.', icon: '🪶', stack: 20, value: 1 },
   { id: 'straw', name: 'Bundle of Straw', description: 'Dry straw, still warm. It should not be warm.', icon: '🌾', stack: 20, value: 1 },
 ];

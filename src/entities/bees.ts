@@ -1,25 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
- * Wild bee swarms in the meadow. Each swarm hangs around a hive on a stump;
- * come too close and it gives chase and stings. A few blows break it up. All
- * swarms are drawn as one instanced mesh of tiny darting specks whose motion
- * is computed on the GPU.
+ * Wild bee swarms in the meadow. Each swarm hangs about a wild hive that hangs
+ * from a bough of one of the meadow's trees; come too close and it gives chase
+ * and stings. A few blows break it up. All swarms are drawn as one instanced
+ * mesh of tiny darting specks whose motion is computed on the GPU.
  */
 import { Fn, cameraWorldMatrix, cos, float, floor, hash, instanceIndex, length, positionGeometry, sin, uniformArray, uv, vec3, vec4, smoothstep } from 'three/tsl';
 import * as THREE from 'three/webgpu';
-import { MeshBuilder, type FaceStyle } from '../buildings/meshBuilder';
 import { env } from '../render/env';
+import type { WorldTextures } from '../render/textures';
 import type { Hittable } from '../systems/combat';
+import { placeHives, placeTrees, type HiveSpot, type TreeSet } from '../world/flora';
+import type { Physics } from '../world/physics';
 import { heightAt, type TerrainData } from '../world/terrainData';
+import { HIVE_LENGTH, hiveGeometry, hiveMaterial } from './hive';
 
-/** Where the hives stand in Aleric's Meadow (world x, z). */
-export const HIVE_SPOTS: readonly (readonly [number, number])[] = [
-  [-12, -302],
-  [96, -398],
-  [-44, -362],
-  [122, -292],
-  [18, -412],
-];
+/** Hives are drawn in full detail within this distance (metres), and plainly beyond it. */
+const HIVE_DETAIL = 38;
 
 const BEES_PER_SWARM = 56;
 const AGGRO_RANGE = 9;
@@ -33,7 +30,10 @@ type State = 'idle' | 'chase' | 'return';
 
 export class Swarm implements Hittable {
   readonly position = new THREE.Vector3();
+  /** The middle of the swarm's hive. */
   readonly home = new THREE.Vector3();
+  /** Which way the hive's bough reaches (unit, on the ground plane): the swarm keeps to that side of the trunk. */
+  readonly out = new THREE.Vector3(0, 0, 1);
   readonly radius = 0.95;
   health = SWARM_HEALTH;
   alive = true;
@@ -77,8 +77,14 @@ export class Swarm implements Hittable {
     const fromHome = Math.hypot(pos.x - this.home.x, pos.z - this.home.z);
 
     if (this.state === 'idle') {
+      // Busy about the hive, drifting round it on the open side of the trunk.
       const i = this.index;
-      pos.set(this.home.x + Math.sin(time * 0.41 + i * 2.1) * 1.3, this.home.y + 1.5 + Math.sin(time * 0.7 + i) * 0.3, this.home.z + Math.cos(time * 0.53 + i * 1.3) * 1.3);
+      const h = this.home;
+      pos.set(
+        h.x + this.out.x * 0.35 + Math.sin(time * 0.41 + i * 2.1) * 0.6,
+        h.y - 0.05 + Math.sin(time * 0.7 + i) * 0.22,
+        h.z + this.out.z * 0.35 + Math.cos(time * 0.53 + i * 1.3) * 0.6,
+      );
       if (toPlayer < AGGRO_RANGE) this.state = 'chase';
     } else if (this.state === 'chase') {
       if (fromHome > LEASH || toPlayer > LEASH) this.state = 'return';
@@ -96,7 +102,7 @@ export class Swarm implements Hittable {
         this.stingTimer = Math.min(STING_EVERY * 0.6, this.stingTimer + dt * 0.5);
       }
     } else {
-      const dest = this.owner.tmp.set(this.home.x, this.home.y + 1.5, this.home.z);
+      const dest = this.owner.tmp.set(this.home.x + this.out.x * 0.35, this.home.y, this.home.z + this.out.z * 0.35);
       const d = pos.distanceTo(dest);
       if (d < 0.6) this.state = 'idle';
       else pos.addScaledVector(dest.sub(pos).normalize(), Math.min(d, 3.4 * dt));
@@ -112,7 +118,7 @@ export class Swarm implements Hittable {
     const floor = groundAt(pos.x, pos.z) + 0.6;
     if (pos.y < floor) pos.y = floor;
 
-    const wantSpread = this.scatter > 0 ? 1.8 : this.state === 'chase' ? 0.55 : 0.8;
+    const wantSpread = this.scatter > 0 ? 1.8 : this.state === 'chase' ? 0.55 : 0.72;
     this.spread += (wantSpread - this.spread) * (1 - Math.exp(-dt * 6));
   }
 
@@ -121,15 +127,19 @@ export class Swarm implements Hittable {
     this.alive = true;
     this.health = SWARM_HEALTH;
     this.state = 'idle';
-    this.spread = 0.8;
+    this.spread = 0.72;
     this.scatter = 0;
-    this.position.set(this.home.x, this.home.y + 1.5, this.home.z);
+    this.position.set(this.home.x + this.out.x * 0.35, this.home.y, this.home.z + this.out.z * 0.35);
   }
 }
 
 export class BeeSwarms {
   readonly swarms: Swarm[] = [];
   readonly mesh: THREE.Mesh;
+  /** Where each hive hangs, one per swarm. */
+  readonly hives: HiveSpot[];
+  /** Each hive, drawn in full detail close by and plainly further off. */
+  private readonly hiveMeshes: { mesh: THREE.Mesh; near: THREE.BufferGeometry; far: THREE.BufferGeometry; x: number; y: number; z: number }[] = [];
   /** Current game day, kept up to date by update(). */
   day = 0;
   readonly tmp = new THREE.Vector3();
@@ -140,33 +150,36 @@ export class BeeSwarms {
   private readonly centres: THREE.Vector4[];
   private readonly groundAt: (x: number, z: number) => number;
 
-  constructor(scene: THREE.Scene, material: THREE.Material, terrain: TerrainData) {
+  /**
+   * @param trees the meadow's trees, which the hives hang in (worked out afresh if the trees are not drawn)
+   * @param physics if given, each hive is solid, so it cannot be walked through
+   */
+  constructor(scene: THREE.Scene, terrain: TerrainData, tex: WorldTextures, trees: TreeSet | null, physics: Physics | null) {
     this.groundAt = (x, z) => heightAt(terrain, x, z);
-    const n = HIVE_SPOTS.length;
+    this.hives = placeHives(terrain, trees ?? placeTrees(terrain));
+    const n = this.hives.length;
     this.centres = Array.from({ length: n }, () => new THREE.Vector4());
     const centreNodes = uniformArray(this.centres, 'vec4');
 
-    // Hives: a straw skep on a stump at each spot.
-    const mb = new MeshBuilder();
-    const st = (hex: string, k = 1): FaceStyle => ({ color: new THREE.Color(hex).multiplyScalar(k), ao: 1, interior: 0 });
-    HIVE_SPOTS.forEach(([x, z], i) => {
-      const y = this.groundAt(x, z);
-      mb.matrix = new THREE.Matrix4().makeTranslation(x, y - 0.05, z);
-      mb.cylinder(0, 0.3, 0, 0.42, 0.6, 9, st('#6a5038'), st('#8a6a48'));
-      for (let k = 0; k < 5; k++) mb.cylinder(0, 0.68 + k * 0.13, 0, 0.34 - k * 0.055, 0.13, 10, st('#c9a557', 0.9 + (k % 2) * 0.12), st('#b08c40'));
-      mb.box(0, 0.7, 0.33, 0.1, 0.07, 0.04, st('#2a2016'));
-      mb.matrix = null;
+    // The hives, each hung from its bough.
+    const material = hiveMaterial(tex);
+    this.hives.forEach((h, i) => {
+      const near = hiveGeometry(h, true);
+      const far = hiveGeometry(h, false);
+      const mesh = new THREE.Mesh(far, material);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.name = 'hive-' + i;
+      scene.add(mesh);
+      const midY = h.y - HIVE_LENGTH * 0.5;
+      this.hiveMeshes.push({ mesh, near, far, x: h.x, y: midY, z: h.z });
+      physics?.addStaticCylinder(h.x, midY, h.z, HIVE_LENGTH * 0.42, 0.22);
       const s = new Swarm(i, this);
-      s.home.set(x, y + 0.6, z);
+      s.home.set(h.x, midY, h.z);
+      s.out.set(h.dirX, 0, h.dirZ);
       s.respawn();
       this.swarms.push(s);
     });
-    const hives = new THREE.Mesh(mb.toGeometry(), material);
-    hives.castShadow = true;
-    hives.receiveShadow = true;
-    hives.frustumCulled = false;
-    hives.name = 'hives';
-    scene.add(hives);
 
     // The bees themselves.
     const g = new THREE.InstancedBufferGeometry();
@@ -216,6 +229,16 @@ export class BeeSwarms {
   /** Things the player can hit. */
   get targets(): readonly Hittable[] {
     return this.swarms;
+  }
+
+  /** Show each hive in full detail when the eye is near it. */
+  updateDetail(eye: THREE.Vector3): void {
+    for (const h of this.hiveMeshes) {
+      const d = Math.hypot(h.x - eye.x, h.y - eye.y, h.z - eye.z);
+      // A little either way of the distance before it changes, so it does not flicker back and forth.
+      if (h.mesh.geometry === h.far && d < HIVE_DETAIL - 2) h.mesh.geometry = h.near;
+      else if (h.mesh.geometry === h.near && d > HIVE_DETAIL + 2) h.mesh.geometry = h.far;
+    }
   }
 
   /** @param target the player's chest */

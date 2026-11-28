@@ -7,8 +7,9 @@
 import { hash2 } from '../core/rng';
 import { BUILDINGS, footprintSdf, pathSdf } from './buildings';
 import { fieldAt } from './fields';
-import { WORLD_SEED, playableSdf } from './layout';
-import { MASK2_CONIFER, MASK2_FOREST, MASK_DIRT, heightAt, mask2At, maskAt, type TerrainData } from './terrainData';
+import { MEADOW, WORLD_SEED, meadowSdf, playableSdf } from './layout';
+import { MASK2_CONIFER, MASK2_FOREST, MASK_DIRT, creekDistanceAt, heightAt, mask2At, maskAt, type TerrainData } from './terrainData';
+import { BROADLEAF_LOW_LIMBS, broadleafTrunkAt, treeToWorld } from './treeShape';
 
 export const TREE_BROADLEAF = 0;
 export const TREE_CONIFER = 1;
@@ -201,11 +202,8 @@ export interface Spot {
  * feet of trees, all within Aleric's Meadow.
  */
 export function placeMoonCaps(t: TerrainData, trees: TreeSet, count = 28): Spot[] {
-  const MEADOW_X = 40;
-  const MEADOW_Z = -330;
-  const MEADOW_R = 195;
   const candidates: Spot[] = [];
-  const ok = (x: number, z: number) => Math.hypot(x - MEADOW_X, z - MEADOW_Z) < MEADOW_R && playableSdf(x, z) < -4 && pathSdf(x, z) > 1.5;
+  const ok = (x: number, z: number) => meadowSdf(x, z) < -3 && playableSdf(x, z) < -3 && pathSdf(x, z) > 1.5;
 
   // Along the creek, a few steps back from the water on alternating banks.
   for (let i = 0; i < t.creek.length; i += 7) {
@@ -220,7 +218,7 @@ export function placeMoonCaps(t: TerrainData, trees: TreeSet, count = 28): Spot[
   for (let i = 0; i < trees.count; i += 3) {
     const tx = trees.x[i]!;
     const tz = trees.z[i]!;
-    if (Math.hypot(tx - MEADOW_X, tz - MEADOW_Z) > MEADOW_R - 15) continue;
+    if (meadowSdf(tx, tz) > 4) continue;
     const a = hash2(i, 2, WORLD_SEED + 62) * Math.PI * 2;
     const r = 1.1 + hash2(i, 3, WORLD_SEED + 63) * 0.9;
     const x = tx + Math.cos(a) * r;
@@ -233,9 +231,127 @@ export function placeMoonCaps(t: TerrainData, trees: TreeSet, count = 28): Spot[
   const out: Spot[] = [];
   for (const i of order) {
     const c = candidates[i]!;
-    if (out.some((o) => Math.hypot(o.x - c.x, o.z - c.z) < 9)) continue;
+    if (out.some((o) => Math.hypot(o.x - c.x, o.z - c.z) < 8)) continue;
     c.y = heightAt(t, c.x, c.z);
     out.push(c);
+    if (out.length >= count) break;
+  }
+  return out;
+}
+
+/** Where a wild hive hangs: from a bough that grows out of one of the meadow's broadleaves. */
+export interface HiveSpot {
+  /** Where the hive's top hangs from the underside of its bough (world metres). */
+  x: number;
+  y: number;
+  z: number;
+  /** The tree it grows in (an index into the tree set). */
+  tree: number;
+  /** Where the bough leaves the middle of the trunk (world metres). */
+  baseX: number;
+  baseY: number;
+  baseZ: number;
+  /** Which way the bough reaches, on the ground plane (a unit vector), and how far (metres). */
+  dirX: number;
+  dirZ: number;
+  reach: number;
+  /** The bough's radius where it leaves the trunk (metres). */
+  thickness: number;
+  /** How far up the bough rises over its reach (metres). */
+  rise: number;
+  /** How far along the bough the hive hangs (0 at the trunk, 1 at the tip). */
+  along: number;
+}
+
+/** Bough proportions in the tree's own frame (before its scale): it leaves the trunk here, reaches and rises this far. */
+export const BOUGH = { height: 2.25, reach: 2.1, rise: 0.42, thickness: 0.12, along: 0.6 } as const;
+
+/** The middle of a hive's bough at `t` (0 at the trunk, 1 at the tip): it rises, then levels under its load. */
+export function boughPoint(h: HiveSpot, t: number, out: { x: number; y: number; z: number }): { x: number; y: number; z: number } {
+  out.x = h.baseX + h.dirX * h.reach * t;
+  out.z = h.baseZ + h.dirZ * h.reach * t;
+  out.y = h.baseY + h.rise * (2 * t - t * t);
+  return out;
+}
+
+/** The bough's radius at `t`. */
+export function boughRadius(h: HiveSpot, t: number): number {
+  return h.thickness * (1 - 0.68 * t);
+}
+
+/**
+ * Wild hives: hung from boughs of sturdy broadleaves well inside the meadow, spread out so that no
+ * two swarms share a stretch of it. Each bough reaches toward the open middle of the meadow (as far
+ * as the tree's own limbs allow), so the hive shows from the glade.
+ */
+export function placeHives(t: TerrainData, trees: TreeSet, count = 5): HiveSpot[] {
+  const candidates: number[] = [];
+  for (let i = 0; i < trees.count; i++) {
+    if (trees.kind[i] !== TREE_BROADLEAF) continue;
+    const x = trees.x[i]!;
+    const z = trees.z[i]!;
+    const s = trees.scale[i]!;
+    if (s < 1.0 || s > 1.5) continue;
+    if (meadowSdf(x, z) > -12 || playableSdf(x, z) > -8) continue;
+    if (pathSdf(x, z) < 4 || creekDistanceAt(t, x, z) < 9) continue;
+    candidates.push(i);
+  }
+  candidates.sort((a, b) => hash2(a, 3, WORLD_SEED + 70) - hash2(b, 3, WORLD_SEED + 70));
+  const out: HiveSpot[] = [];
+  const trunk = { x: 0, y: 0, z: 0, r: 0 };
+  const w = { x: 0, y: 0, z: 0 };
+  for (const i of candidates) {
+    const tx = trees.x[i]!;
+    const tz = trees.z[i]!;
+    if (out.some((o) => Math.hypot(o.x - tx, o.z - tz) < 34)) continue;
+    const tree = { x: tx, y: trees.y[i]!, z: tz, scale: trees.scale[i]!, rot: trees.rot[i]!, seed: trees.seed[i]! };
+    // Toward the meadow's middle, turned into the tree's own frame...
+    const toX = MEADOW.x - tx;
+    const toZ = MEADOW.z - tz;
+    const sn = Math.sin(tree.rot);
+    const cs = Math.cos(tree.rot);
+    let az = Math.atan2(toX * sn + toZ * cs, toX * cs - toZ * sn);
+    // ...then kept at least 30 degrees from any of the tree's own lower limbs.
+    for (let pass = 0; pass < 3; pass++) {
+      for (const limb of BROADLEAF_LOW_LIMBS) {
+        const d = Math.atan2(Math.sin(az - limb), Math.cos(az - limb));
+        if (Math.abs(d) < 0.52) az = limb + Math.sign(d || 1) * 0.52;
+      }
+    }
+    const lx = Math.cos(az);
+    const lz = Math.sin(az);
+    broadleafTrunkAt(BOUGH.height, trunk);
+    treeToWorld(tree, trunk.x, trunk.y, trunk.z, w);
+    const baseX = w.x;
+    const baseY = w.y;
+    const baseZ = w.z;
+    treeToWorld(tree, trunk.x + lx, trunk.y, trunk.z + lz, w);
+    const dx = w.x - baseX;
+    const dz = w.z - baseZ;
+    const len = Math.hypot(dx, dz);
+    const stretch = (tree.seed - 0.5) * 0.28 + 1;
+    const spot: HiveSpot = {
+      x: 0,
+      y: 0,
+      z: 0,
+      tree: i,
+      baseX,
+      baseY,
+      baseZ,
+      dirX: dx / len,
+      dirZ: dz / len,
+      reach: BOUGH.reach * tree.scale,
+      thickness: BOUGH.thickness * tree.scale,
+      rise: BOUGH.rise * tree.scale * stretch,
+      along: BOUGH.along,
+    };
+    boughPoint(spot, spot.along, w);
+    spot.x = w.x;
+    spot.z = w.z;
+    spot.y = w.y - boughRadius(spot, spot.along) * 0.6;
+    // High enough to walk under (the hive hangs about a metre below its bough).
+    if (spot.y - heightAt(t, spot.x, spot.z) < 2.55) continue;
+    out.push(spot);
     if (out.length >= count) break;
   }
   return out;

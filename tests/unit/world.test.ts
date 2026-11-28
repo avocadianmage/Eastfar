@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { beforeAll, describe, expect, it } from 'vitest';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { CREEK_POINTS, MEADOW, SPAWN, STATUE, VILLAGE, playableSdf, regionAt } from '../../src/world/layout';
+import { CREEK_POINTS, MEADOW, SPAWN, STATUE, VILLAGE, meadowSdf, playableSdf, regionAt } from '../../src/world/layout';
 import { Physics } from '../../src/world/physics';
 import { MASK_FLOWERS, MASK_GRASS, MASK_WET, WET_NO_FLOWERS, WET_NO_GRASS, bakeTerrain, heightAt, maskAt, waterDepthAt, type TerrainData } from '../../src/world/terrainData';
 
@@ -61,6 +61,37 @@ describe('terrain', () => {
     expect(ridge - inside).toBeGreaterThan(25);
   });
 
+  it('grows wildflowers in the meadow and nowhere else', () => {
+    let outside = 0;
+    let inside = 0;
+    let insideWithFlowers = 0;
+    for (let iz = 0; iz < terrain.n; iz += 2) {
+      for (let ix = 0; ix < terrain.n; ix += 2) {
+        const x = terrain.minX + ix * terrain.cell;
+        const z = terrain.minZ + iz * terrain.cell;
+        const flowers = terrain.masks[(iz * terrain.n + ix) * 4 + MASK_FLOWERS]! / 255;
+        const m = meadowSdf(x, z);
+        if (m > 3 && flowers > 0) outside++;
+        if (m < -20) {
+          inside++;
+          if (flowers > 0.1) insideWithFlowers++;
+        }
+      }
+    }
+    expect(outside).toBe(0);
+    expect(insideWithFlowers / inside).toBeGreaterThan(0.4);
+  });
+
+  it('keeps the meadow a glade about 200 metres across', () => {
+    // Walkable straight across it, and not much further.
+    expect(meadowSdf(MEADOW.x, MEADOW.z)).toBeLessThan(-80);
+    for (let a = 0; a < 360; a += 30) {
+      const t = (a * Math.PI) / 180;
+      expect(meadowSdf(MEADOW.x + Math.cos(t) * 125, MEADOW.z + Math.sin(t) * 125)).toBeGreaterThan(0);
+      expect(meadowSdf(MEADOW.x + Math.cos(t) * 80, MEADOW.z + Math.sin(t) * 80)).toBeLessThan(0);
+    }
+  });
+
   it('places landmarks on walkable land', () => {
     expect(playableSdf(SPAWN.x, SPAWN.z)).toBeLessThan(0);
     expect(playableSdf(STATUE.x, STATUE.z)).toBeLessThan(0);
@@ -81,7 +112,8 @@ describe('creek', () => {
     for (let i = 100; i < 1000; i += 90) {
       const p = terrain.creek[i]!;
       const depth = waterDepthAt(terrain, p.x, p.z);
-      expect(depth).toBeGreaterThan(0.2);
+      // Where it tumbles down out of the hills into the meadow, off the walkable land, it runs shallower.
+      expect(depth).toBeGreaterThan(playableSdf(p.x, p.z) < 0 ? 0.2 : 0.1);
       expect(depth).toBeLessThan(1.2);
       expect(maskAt(terrain, p.x, p.z, MASK_GRASS)).toBe(0);
     }

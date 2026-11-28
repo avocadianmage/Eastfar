@@ -195,12 +195,12 @@ test('stays inside the draw-call and triangle budget at high quality', async ({ 
   await page.setViewportSize({ width: 320, height: 180 });
   await boot(page, 'freeze=1&time=10:00&quality=high&pos=40,-330&yaw=20');
   const views: [string, number, number, number][] = [
-    ['open meadow', 40, -330, 20],
+    ['open meadow', 44, -318, 20],
     ['creek bank', 96, -352, 255],
     ['village green', -6, 8, 80],
-    ['forest edge', -150, -330, 300],
-    // The spot on walkable ground with the most trees close by, looking the costliest way.
-    ['deep in the wood', -124, -452, 315],
+    ['meadow edge', -46, -330, 270],
+    // The spot on walkable ground with the most trees close by, looking the costliest way: the statue's dell.
+    ['deep in the wood', -45, -386, 315],
   ];
   for (const [name, x, z, yaw] of views) {
     await page.evaluate(([px, pz, pyaw]) => (window as unknown as W).__eastfar.teleport(px!, pz!, pyaw), [x, z, yaw]);

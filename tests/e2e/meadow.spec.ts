@@ -24,6 +24,7 @@ const frames = async (page: Page, n: number) => {
 };
 
 type SwarmInfo = { x: number; y: number; z: number; alive: boolean; health: number; state: string };
+type HiveInfo = { x: number; y: number; z: number; dirX: number; dirZ: number; ground: number };
 
 test('bee swarms sting, can be broken up with bare hands, and count toward the quest', async ({ page }) => {
   await boot(page, 'time=11:00');
@@ -31,11 +32,22 @@ test('bee swarms sting, can be broken up with bare hands, and count toward the q
   await api(page, 'api.game.gameplay.quests.accept("meadow_bees");');
   expect(await api<string>(page, 'return api.questStatus("meadow_bees");')).toBe('active');
 
-  // Walk up to the first hive: the swarm notices and comes for the player.
+  // Each swarm is busy about its own hive, which hangs from a bough of a meadow tree.
   const swarms = await api<SwarmInfo[]>(page, 'return api.swarms();');
+  const hives = await api<HiveInfo[]>(page, 'return api.hives();');
   expect(swarms.length).toBe(5);
+  expect(hives.length).toBe(5);
   expect(swarms.every((s) => s.alive && s.health === 4)).toBe(true);
-  await api(page, 'api.teleport(-12, -296, 0, 0);');
+  swarms.forEach((s, i) => {
+    const h = hives[i]!;
+    expect(Math.hypot(s.x - h.x, s.z - h.z), 'swarm near its hive').toBeLessThan(1.6);
+    expect(h.y - h.ground, 'hive hangs above head height').toBeGreaterThan(2.5);
+  });
+
+  // Walk up to the first hive from the open side: the swarm notices and comes for the player.
+  const h = hives[0]!;
+  const yaw = (Math.atan2(-h.dirX, h.dirZ) * 180) / Math.PI;
+  await api(page, `api.teleport(${h.x + h.dirX * 5}, ${h.z + h.dirZ * 5}, ${yaw}, 0);`);
   await page.waitForFunction(() => (window as unknown as { __eastfar: { swarms(): SwarmInfo[] } }).__eastfar.swarms()[0]!.state === 'chase', null, { timeout: 60_000 });
 
   // Standing still, the player gets stung.
