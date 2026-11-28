@@ -74,7 +74,7 @@ describe('terrain', () => {
         if (m > 3 && Math.hypot(x - STATUE.x, z - STATUE.z) > STATUE_DELL + 5 && flowers > 0) outside++;
         if (m < -20) {
           inside++;
-          if (flowers > 0.1) insideWithFlowers++;
+          if (flowers > 0.01) insideWithFlowers++;
         }
       }
     }

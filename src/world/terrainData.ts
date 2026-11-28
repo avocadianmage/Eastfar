@@ -22,6 +22,11 @@ export const MASK_FLOWERS = 3;
  */
 export const WET_NO_GRASS = 0.6;
 export const WET_NO_FLOWERS = 0.42;
+/**
+ * The wildflowers grow thickest round Aleric's statue and thin out with distance from it: their density
+ * falls by e (to about a third) for every this many metres further away.
+ */
+export const FLOWERS_FALL = 40;
 /** Channels of the second mask texture. */
 export const MASK2_FOREST = 0;
 export const MASK2_CONIFER = 1;
@@ -296,7 +301,10 @@ export function bakeTerrain(timings?: Record<string, number>): TerrainData {
       // and round its feet the dell is all flowers.
       const toStatue = Math.hypot(x - STATUE.x, z - STATUE.z);
       const inMeadow = Math.max(1 - smoothstep(-10, 3, msdf), 1 - smoothstep(STATUE_DELL - 1, STATUE_DELL + 4, toStatue));
-      const toward = 1 - smoothstep(12, 200, toStatue);
+      // How thick they grow at this distance from him: a carpet round his feet, falling away steeply, so that
+      // across the meadow the flowers plainly thin out the further they are from him. The patches of the noise
+      // below only vary that by a little, never above it.
+      const toward = Math.min(1, Math.exp(-(toStatue - 16) / FLOWERS_FALL)) + 0.02;
       // (Clear of the plinth itself.)
       const carpet = (1 - smoothstep(10, 19, toStatue)) * smoothstep(1.6, 2.8, toStatue);
       const wFarm = 1 - smoothstep(-40, 10, farmsSdf(x, z));
@@ -314,14 +322,14 @@ export function bakeTerrain(timings?: Record<string, number>): TerrainData {
       const d = creekDist[i]!;
       const hw = creekHalfWidth[i]!;
       let wet = 0;
-      let flowers = inMeadow > 0 ? inMeadow * (smoothstep(-0.05, 0.4, fbm2(x / 30, z / 30, 3, seed + 401)) * (0.25 + 0.75 * toward) * 0.9 + 0.04 + 0.22 * toward * toward) : 0;
+      let flowers = inMeadow > 0 ? inMeadow * toward * (0.6 + 0.4 * smoothstep(-0.05, 0.4, fbm2(x / 30, z / 30, 3, seed + 401))) : 0;
       flowers = Math.max(flowers, carpet) * smoothstep(1.6, 2.8, toStatue);
       if (d < FAR) {
         wet = 1 - smoothstep(hw - 0.4, hw + 2.4, d);
         // Lush, tall growth along the banks; nothing in the water itself.
         const bankBand = smoothstep(hw + 0.2, hw + 2.5, d) * (1 - smoothstep(hw + 5, hw + 14, d));
         grass += bankBand * 0.3;
-        flowers += bankBand * 0.35 * inMeadow * (0.4 + 0.6 * toward);
+        flowers += bankBand * 0.35 * inMeadow * toward;
         const dry = smoothstep(hw - 0.1, hw + 0.9, d);
         grass *= dry;
         flowers *= dry;

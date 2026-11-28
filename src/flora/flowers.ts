@@ -553,12 +553,13 @@ export class Flowers {
       const mask = texture(tex.mask, tuv).level(float(0));
       const nrm = texture(tex.normal, tuv).level(float(0)).xyz.mul(2).sub(1);
 
-      // Flowers gather in drifts: a slow noise decides where they are thick. Round Aleric's statue
-      // there are no gaps between the drifts: the dell is one carpet of them.
+      // Flowers gather in drifts: a slow noise makes them a little thicker in some places than others (how
+      // thick they grow at all is in the mask: thickest round Aleric's statue, thinning out away from it).
+      // Round the statue there are no gaps between the drifts: the dell is one carpet of them.
       const drift = texture(tex.noise, xz.mul(1 / 21)).level(float(0)).g;
       const carpet = float(1).sub(smoothstep(9, 24, length(xz.sub(vec2(STATUE.x, STATUE.z)))));
       // None in the water or at its very edge.
-      const chance = mask.a.mul(mix(smoothstep(0.3, 0.62, drift).mul(0.85).add(0.1), float(1), carpet)).mul(step(mask.b, WET_NO_FLOWERS));
+      const chance = mask.a.mul(mix(smoothstep(0.3, 0.62, drift).mul(0.4).add(0.6), float(1), carpet)).mul(step(mask.b, WET_NO_FLOWERS));
       const dist = length(xz.sub(env.viewPos.xz));
       const grows = smoothstep(r3, r3.add(0.02), chance);
       // A plant is drawn by one ring or the other and is always its full size. What changes with

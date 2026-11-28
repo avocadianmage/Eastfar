@@ -5,7 +5,7 @@
  * half again life size, on a stepped octagonal plinth carved with a rising sun. He stands in a ring of trees at
  * the meadow's edge, in a carpet of flowers. The figure was made in VRoid Studio and is posed and baked by
  * tools/assets/build-vrm.mjs (buildStatue); the plinth and the staff are shaped here. All of it is weathered
- * stone: pale, mottled, darker in the folds, with moss and lichen where rain lands.
+ * stone: pale, mottled, darker in the folds, with moss and lichen where rain lands. Nothing of it glows.
  */
 import { attribute, dot, float, mix, normalWorld, positionLocal, positionWorld, smoothstep, texture, uv, vec2, vec3 } from 'three/tsl';
 import * as THREE from 'three/webgpu';
@@ -67,9 +67,7 @@ function stoneMaterial(tex: WorldTextures, painted: THREE.Texture | null): THREE
   stone = mix(stone, vec3(0.74, 0.7, 0.42), lichen);
   mat.colorNode = stone;
   // Stone in shade still takes a little of the sky, so the statue reads as pale stone and not as a dark shape.
-  // The orb on his staff (the vertex colour's third part) holds a faint warm light, which after dark is a glow.
-  const glow = info.z.mul(float(1).sub(env.dayFactor).mul(2.4).add(0.12));
-  mat.emissiveNode = stone.mul(env.ambientSky.mul(0.12)).add(stone.mul(lanternLight(positionWorld))).add(vec3(1, 0.84, 0.55).mul(glow));
+  mat.emissiveNode = stone.mul(env.ambientSky.mul(0.12)).add(stone.mul(lanternLight(positionWorld)));
   return mat;
 }
 
@@ -233,7 +231,6 @@ function staff(grip: THREE.Vector3, sole: number, top: number): THREE.BufferGeom
       out.y = cy + Math.cos(b) * 0.045;
       out.z = grip.z + Math.sin(a) * Math.sin(b) * 0.045;
       fill(out);
-      out.a[2] = 1;
     },
     { wrap: true, poleStart: true, poleEnd: true },
   );
