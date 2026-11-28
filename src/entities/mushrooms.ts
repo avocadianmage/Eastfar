@@ -18,8 +18,11 @@ export const REGROW_DAYS = 2;
 /** Clusters within this distance (metres) are drawn in full detail, at most NEAR_MAX of them. */
 const NEAR = 20;
 const NEAR_MAX = 6;
-/** Beyond this distance a cluster is too small to see (its glow still shows at night). */
+/** Beyond this distance a cluster is too small to see. */
 const FAR = 95;
+/** After dark a cluster's glow fades out between these distances (metres), so it is found close by, not seen across the land. */
+const GLOW_FROM = 20;
+const GLOW_TO = 40;
 
 /** One mushroom of a cluster: where it stands, how tall, its cap's radius, which way it leans, how domed its cap is. */
 interface Cap {
@@ -292,7 +295,8 @@ function capMaterial(): THREE.MeshLambertNodeMaterial {
   const gills = float(1).sub(part.sub(2).abs()).max(0);
   const glowCol = mix(mix(vec3(0.5, 0.68, 1.0), vec3(0.32, 0.42, 1.0), isCap), vec3(0.3, 0.88, 1.0), gills);
   const lit = glowCol.mul(glow).mul(float(1).sub(isCap.mul(0.35))).add(vec3(0.78, 0.94, 1.0).mul(fleck.mul(3.2)));
-  mat.emissiveNode = lit.mul(night).mul(pulse).mul(1.7).add(sheen).add(through).add(albedo.mul(lanternLight(positionWorld)));
+  const near = float(1).sub(smoothstep(GLOW_FROM, GLOW_TO + 10, length(positionWorld.sub(env.viewPos))));
+  mat.emissiveNode = lit.mul(night).mul(pulse).mul(near).mul(1.7).add(sheen).add(through).add(albedo.mul(lanternLight(positionWorld)));
   return mat;
 }
 
@@ -344,6 +348,7 @@ export class MoonCaps {
     haloMat.blending = THREE.AdditiveBlending;
     haloMat.side = THREE.DoubleSide;
     haloMat.fog = false;
+    const close = float(1).sub(smoothstep(GLOW_FROM, GLOW_TO, length(positionWorld.sub(env.viewPos))));
     const night = float(1).sub(env.dayFactor);
     const pulse = sin(env.time.mul(0.9).add(positionWorld.x.mul(0.7)).add(positionWorld.z.mul(0.9))).mul(0.2).add(0.85);
     // The facing card stands over the cluster's middle; its corners are pushed out along the eye's right and up.
@@ -356,7 +361,7 @@ export class MoonCaps {
     haloMat.positionNode = mix(positionLocal, card, facing);
     // Round, and fading out toward its lower edge, so no hard line shows where the card dips into the ground.
     const fall = smoothstep(1.0, 0.0, length(uv().sub(0.5)).mul(2)).mul(smoothstep(0.12, 0.5, uv().y));
-    haloMat.colorNode = vec3(0.45, 0.78, 1.0).mul(fall.mul(fall)).mul(night).mul(pulse).mul(mix(float(0.45), float(0.6), facing));
+    haloMat.colorNode = vec3(0.45, 0.78, 1.0).mul(fall.mul(fall)).mul(night).mul(pulse).mul(close).mul(mix(float(0.45), float(0.6), facing));
     this.halo = new THREE.InstancedMesh(haloGeometry(), haloMat, spots.length);
     this.halo.frustumCulled = false;
     this.halo.renderOrder = 18;
@@ -401,7 +406,9 @@ export class MoonCaps {
       const m = this.pose(i);
       if (d < NEAR && near < this.mesh.instanceMatrix.count) this.mesh.setMatrixAt(near++, m);
       else if (d < FAR) this.far.setMatrixAt(far++, m);
-      this.matrix.makeTranslation(this.spots[i]!.x, this.spots[i]!.y, this.spots[i]!.z);
+      // No glow is drawn for a cluster beyond where it would have faded out.
+      if (d < GLOW_TO + 2) this.matrix.makeTranslation(this.spots[i]!.x, this.spots[i]!.y, this.spots[i]!.z);
+      else this.matrix.copy(this.hidden);
       this.halo.setMatrixAt(i, this.matrix);
     }
     this.mesh.count = near;

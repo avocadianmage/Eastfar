@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
- * Fireflies: small drifting, blinking lights over the grass at night. Placed
+ * Fireflies: a few small drifting, blinking lights over the grass at night,
+ * rare enough to be a treat, and a little less rare by the creek. Placed
  * by the GPU on a wrapping grid around the player, like the grass, so they
  * cost one draw call and no per-frame work.
  */
@@ -14,11 +15,13 @@ import {
   instanceIndex,
   length,
   max,
+  mix,
   mod,
   positionGeometry,
   pow,
   sin,
   smoothstep,
+  step,
   texture,
   uint,
   uv,
@@ -35,6 +38,9 @@ import { terrainUv } from '../render/terrain';
 import type { WorldTextures } from '../render/textures';
 
 const CELL = 2.6;
+/** The share of the grid's cells that has a firefly, over tall grass and by the creek's water. */
+const IN_GRASS = 0.05;
+const BY_WATER = 0.13;
 
 export class Fireflies {
   readonly mesh: THREE.Mesh;
@@ -73,6 +79,7 @@ export class Fireflies {
       const r2 = hash(seed.add(uint(7919)));
       const r3 = hash(seed.add(uint(104729)));
       const r4 = hash(seed.add(uint(1299709)));
+      const r5 = hash(seed.add(uint(15485863)));
 
       const home = wc.add(vec2(r1, r2)).mul(CELL);
       const tuv = terrainUv(t, home);
@@ -92,7 +99,9 @@ export class Fireflies {
 
       // They keep to tall grass and the creek's banks, come out as the light goes, and blink slowly.
       const habitat = max(smoothstep(0.55, 0.85, mask.r), mask.b.mul(0.6));
-      const out = smoothstep(r1.mul(0.6), r1.mul(0.6).add(0.1), habitat.mul(0.75));
+      // Only a few cells have one at all: fireflies are a rare sight, a little less rare by the water.
+      const rare = step(r5, mix(float(IN_GRASS), float(BY_WATER), smoothstep(0.05, 0.4, mask.b)));
+      const out = smoothstep(r1.mul(0.6), r1.mul(0.6).add(0.1), habitat.mul(0.75)).mul(rare);
       const night = float(1).sub(env.dayFactor).mul(smoothstep(0.0, 0.35, env.starVisibility.add(0.25)));
       const blink = pow(max(sin(time.mul(r2.mul(0.9).add(0.7)).add(ph)), 0), 2.5);
       const dist = length(centre.sub(env.viewPos));
