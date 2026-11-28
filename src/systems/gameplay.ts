@@ -612,7 +612,7 @@ export class Gameplay {
     const f = d.player.feet;
     this.chestPos.set(f.x, f.y + 1.2, f.z);
     if (this.mode !== 'menu' && d.bees) {
-      d.bees.update(dt, this.playtime, d.clock.day, this.chestPos);
+      d.bees.update(dt, this.playtime, d.clock.day, this.chestPos, d.clock.isNight);
       const near = d.bees.nearest(this.chestPos);
       if (near) {
         const dx = near.swarm.position.x - f.x;

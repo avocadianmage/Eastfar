@@ -2,7 +2,8 @@
 /**
  * Wild bee swarms in the meadow. Each swarm hangs about a wild hive that hangs
  * from a bough of one of the meadow's trees; come too close and it gives chase
- * and stings. A few blows break it up. All swarms are drawn as one instanced
+ * and stings. A few blows break it up. At dusk the bees go home into the hive
+ * and stay in until dawn. All swarms are drawn as one instanced
  * mesh of tiny darting specks whose motion is computed on the GPU.
  */
 import { Fn, cameraWorldMatrix, cos, float, floor, hash, instanceIndex, length, positionGeometry, sin, uniformArray, uv, vec3, vec4, smoothstep } from 'three/tsl';
@@ -34,6 +35,10 @@ export class Swarm implements Hittable {
   readonly home = new THREE.Vector3();
   /** Which way the hive's bough reaches (unit, on the ground plane): the swarm keeps to that side of the trunk. */
   readonly out = new THREE.Vector3(0, 0, 1);
+  /** The hive's entrance, which the bees go in and out by. */
+  readonly door = new THREE.Vector3();
+  /** In the hive for the night: not seen, not heard, and nothing to hit. */
+  inside = false;
   readonly radius = 0.95;
   health = SWARM_HEALTH;
   alive = true;
@@ -66,13 +71,37 @@ export class Swarm implements Hittable {
     }
   }
 
-  update(dt: number, time: number, target: THREE.Vector3, groundAt: (x: number, z: number) => number): void {
+  /** True while the swarm is in its hive (combat leaves it alone). */
+  get hidden(): boolean {
+    return this.inside;
+  }
+
+  /** @param night true between dusk and dawn, when the bees are home in the hive */
+  update(dt: number, time: number, target: THREE.Vector3, groundAt: (x: number, z: number) => number, night: boolean): void {
     if (!this.alive) {
       // Scattered bees drift apart and are gone.
       this.spread = Math.min(4, this.spread + dt * 5);
       return;
     }
     const pos = this.position;
+    if (night) {
+      // Home for the night: whatever they were about, they fly back, close up and crawl in.
+      if (this.inside) return;
+      this.state = 'return';
+      this.scatter = 0;
+      const d = pos.distanceTo(this.door);
+      pos.addScaledVector(this.owner.tmp.subVectors(this.door, pos).normalize(), Math.min(d, 3.4 * dt));
+      this.spread += (0.1 - this.spread) * (1 - Math.exp(-dt * 3));
+      if (d < 0.25) this.inside = true;
+      return;
+    }
+    if (this.inside) {
+      // Morning: out they come.
+      this.inside = false;
+      this.state = 'idle';
+      pos.copy(this.door);
+      this.spread = 0.15;
+    }
     const toPlayer = pos.distanceTo(target);
     const fromHome = Math.hypot(pos.x - this.home.x, pos.z - this.home.z);
 
@@ -177,6 +206,8 @@ export class BeeSwarms {
       const s = new Swarm(i, this);
       s.home.set(h.x, midY, h.z);
       s.out.set(h.dirX, 0, h.dirZ);
+      // The entrance is on the side facing the way the bough reaches, a little below the hive's middle.
+      s.door.set(h.x + h.dirX * 0.27, midY - 0.15, h.z + h.dirZ * 0.27);
       s.respawn();
       this.swarms.push(s);
     });
@@ -241,16 +272,19 @@ export class BeeSwarms {
     }
   }
 
-  /** @param target the player's chest */
-  update(dt: number, time: number, day: number, target: THREE.Vector3): void {
+  /**
+   * @param target the player's chest
+   * @param night true between dusk and dawn
+   */
+  update(dt: number, time: number, day: number, target: THREE.Vector3, night = false): void {
     this.day = day;
     this.swarms.forEach((s, i) => {
       // A broken swarm re-forms the next day, once the player is well away.
       if (!s.alive && day > s.diedDay && s.home.distanceTo(target) > 45) s.respawn();
-      s.update(dt, time, target, this.groundAt);
+      s.update(dt, time, target, this.groundAt, night);
       const c = this.centres[i]!;
-      // Dead swarms are tucked underground once they have dispersed.
-      if (!s.alive && s.spread >= 3.9) c.set(s.position.x, -500, s.position.z, 0.01);
+      // Dead swarms are tucked underground once they have dispersed, and so are swarms in for the night.
+      if ((!s.alive && s.spread >= 3.9) || s.inside) c.set(s.position.x, -500, s.position.z, 0.01);
       else c.set(s.position.x, s.position.y, s.position.z, s.spread);
     });
   }
@@ -260,7 +294,7 @@ export class BeeSwarms {
     let best: Swarm | null = null;
     let bd = Infinity;
     for (const s of this.swarms) {
-      if (!s.alive) continue;
+      if (!s.alive || s.inside) continue;
       const d = s.position.distanceTo(p);
       if (d < bd) {
         bd = d;

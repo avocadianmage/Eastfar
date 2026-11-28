@@ -8,7 +8,7 @@ import { clamp, fbm2, lerp, smoothstep, valueNoise2 } from '../core/rng';
 import { BRIDGE, BUILDINGS, PATHS, footprintSdf } from './buildings';
 import { buildCreek, type CreekSample } from './creek';
 import { FIELDS, fieldSdf } from './fields';
-import { STATUE, TERRAIN, VILLAGE, WORLD_SEED, approachSdf, eastOpening, farmsSdf, meadowSdf, playableSdf } from './layout';
+import { STATUE, STATUE_DELL, TERRAIN, VILLAGE, WORLD_SEED, approachSdf, eastOpening, farmsSdf, meadowSdf, playableSdf } from './layout';
 
 export const MASK_GRASS = 0;
 export const MASK_DIRT = 1;
@@ -291,8 +291,14 @@ export function bakeTerrain(timings?: Record<string, number>): TerrainData {
       const wVillage = 1 - smoothstep(50, 110, Math.hypot(x - VILLAGE.x, z - VILLAGE.z));
       const msdf = meadowSdf(x, z);
       const wMeadow = 1 - smoothstep(-35, 20, msdf);
-      // Wildflowers grow in the meadow and nowhere else: right up to its wooded rim, and none past it.
-      const inMeadow = 1 - smoothstep(-10, 3, msdf);
+      // Wildflowers grow in the meadow and nowhere else: right up to its wooded rim, and none past
+      // it, except in the statue's dell. They grow thicker the nearer they are to Aleric's statue,
+      // and round its feet the dell is all flowers.
+      const toStatue = Math.hypot(x - STATUE.x, z - STATUE.z);
+      const inMeadow = Math.max(1 - smoothstep(-10, 3, msdf), 1 - smoothstep(STATUE_DELL - 1, STATUE_DELL + 4, toStatue));
+      const toward = 1 - smoothstep(12, 200, toStatue);
+      // (Clear of the plinth itself.)
+      const carpet = (1 - smoothstep(10, 19, toStatue)) * smoothstep(1.6, 2.8, toStatue);
       const wFarm = 1 - smoothstep(-40, 10, farmsSdf(x, z));
       const wWild = smoothstep(5, 70, sdf);
 
@@ -308,13 +314,14 @@ export function bakeTerrain(timings?: Record<string, number>): TerrainData {
       const d = creekDist[i]!;
       const hw = creekHalfWidth[i]!;
       let wet = 0;
-      let flowers = inMeadow > 0 ? inMeadow * (smoothstep(-0.05, 0.4, fbm2(x / 30, z / 30, 3, seed + 401)) * 0.9 + 0.12) : 0;
+      let flowers = inMeadow > 0 ? inMeadow * (smoothstep(-0.05, 0.4, fbm2(x / 30, z / 30, 3, seed + 401)) * (0.25 + 0.75 * toward) * 0.9 + 0.04 + 0.22 * toward * toward) : 0;
+      flowers = Math.max(flowers, carpet) * smoothstep(1.6, 2.8, toStatue);
       if (d < FAR) {
         wet = 1 - smoothstep(hw - 0.4, hw + 2.4, d);
         // Lush, tall growth along the banks; nothing in the water itself.
         const bankBand = smoothstep(hw + 0.2, hw + 2.5, d) * (1 - smoothstep(hw + 5, hw + 14, d));
         grass += bankBand * 0.3;
-        flowers += bankBand * 0.35 * inMeadow;
+        flowers += bankBand * 0.35 * inMeadow * (0.4 + 0.6 * toward);
         const dry = smoothstep(hw - 0.1, hw + 0.9, d);
         grass *= dry;
         flowers *= dry;
@@ -394,10 +401,10 @@ export function bakeTerrain(timings?: Record<string, number>): TerrainData {
       const sdz = z - STATUE.z;
       const sd = Math.hypot(sdx, sdz);
       if (sd < 46) {
-        const ring = smoothstep(9, 15, sd) * (1 - smoothstep(30, 46, sd));
+        const ring = smoothstep(13, 19, sd) * (1 - smoothstep(30, 46, sd));
         const gap = smoothstep(0.75, 0.93, (sdx * 0.78 + sdz * 0.62) / Math.max(sd, 1e-3));
         forest = Math.max(forest, ring * 0.78 * (1 - gap));
-        forest *= smoothstep(6, 10, sd);
+        forest *= smoothstep(10, 14, sd);
       }
 
       const d = creekDist[i]!;

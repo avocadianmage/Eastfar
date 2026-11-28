@@ -130,7 +130,7 @@ export const NPCS: readonly NpcDef[] = [
     night: { x: 0.6, z: 0.8, yaw: 180 },
     look: { model: 'child', height: 0.7, build: 0.95, head: 1.16, stature: 1.16 },
     lines: [
-      'I saw the stone man in the meadow! He has moss for hair. You have to go past the bent trees.',
+      'I saw the stone man in the meadow! He stands in flowers up to his knees. You just keep going where the flowers get thicker.',
       'Brenna says there are wolves past the farms. Hesta says there are not. Brenna has a sword, so.',
       'Are you going east? Everybody says nobody goes east. So somebody should.',
     ],

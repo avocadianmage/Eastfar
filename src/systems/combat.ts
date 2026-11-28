@@ -17,6 +17,8 @@ export interface Hittable {
   /** How big a target it is, metres. */
   readonly radius: number;
   readonly alive: boolean;
+  /** Out of reach for now (a swarm in its hive for the night). */
+  readonly hidden?: boolean;
   /** Take a blow. `dirX`/`dirZ` point from the attacker toward the target. */
   hit(damage: number, dirX: number, dirZ: number): void;
 }
@@ -85,7 +87,7 @@ export class Combat {
     let best: Hittable | null = null;
     let bestScore = Infinity;
     for (const t of targets) {
-      if (!t.alive) continue;
+      if (!t.alive || t.hidden) continue;
       const dx = t.position.x - eye.x;
       const dy = t.position.y - eye.y;
       const dz = t.position.z - eye.z;

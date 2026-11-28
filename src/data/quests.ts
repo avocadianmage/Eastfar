@@ -43,13 +43,13 @@ export const QUESTS: readonly QuestDef[] = [
     id: 'old_legend',
     title: 'The Old Legend',
     giver: 'elder',
-    summary: 'Find the statue of Aleric, hidden somewhere at the edge of the meadow north of the village.',
+    summary: 'Find the statue of Aleric, hidden at the edge of the meadow north of the village. The wildflowers grow thicker the nearer you are to him.',
     offer: [
       'You have the look of someone about to leave. Aleric had it too, they say, the morning he walked east and did not come back.',
-      'There is a statue of him out in the meadow. Old as the village, half swallowed by trees. I have not the knees to visit it any more. Would you look in on him for me?',
+      'There is a statue of him out in the meadow. Old as the village, half swallowed by trees, and by flowers. They have always grown thickest round him, and nobody can say why. I have not the knees to visit it any more. Would you look in on him for me?',
     ],
-    accept: 'Follow the creek north, then keep to the western trees. He stands in a hollow, facing the sunrise. He always faced the sunrise.',
-    progress: 'North along the creek, then west under the trees. Look for a ring of old oaks with a gap on the sunrise side.',
+    accept: 'Follow the creek north, then follow the flowers. They grow thicker the nearer you are to him, and round his feet the hollow is nothing but blossom. He stands facing the sunrise. He always faced the sunrise.',
+    progress: 'North along the creek, then west, wherever the flowers grow thickest. Look for a ring of old oaks with a gap on the sunrise side.',
     complete: [
       'So he still stands. And his token was still at his feet, after all these years? Keep it. I think he would rather it travelled.',
       'Everyone here knows the first half of his story. Nobody knows the second. Perhaps that is yours to find.',

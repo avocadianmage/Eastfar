@@ -12,6 +12,7 @@ import {
   attribute,
   dot,
   float,
+  fract,
   max,
   mix,
   normalize,
@@ -37,6 +38,13 @@ import type { WorldTextures } from '../render/textures';
 /** Metres a second the surface drifts downstream where the creek is level, and how much more for each unit of slope. */
 const SPEED_IN_POOLS = 0.3;
 const SPEED_ON_SLOPE = 9;
+/**
+ * Patterns on and under the water slide downstream for this long (seconds) and are then
+ * swapped for a fresh copy, cross-fading between two copies half a cycle apart. A pattern
+ * that simply slid on for ever would tear: the water runs at different speeds a few metres
+ * apart, and over minutes of play the difference grows into smears and cuts.
+ */
+const FLOW_CYCLE = 2.2;
 /** How strongly water bends light going into it (its refractive index). */
 const WATER_INDEX = 1.33;
 /** How fast each colour of light is lost in the water, per metre of the way through it. Kept small: the creek is clear. */
@@ -106,18 +114,31 @@ export class CreekWater {
       const slope = attribute('aSlope', 'float');
       const dir = attribute('aFlowDir', 'vec2');
       const time = env.time;
-      // How far the surface has drifted downstream (metres): a slow glide in the pools, quicker down the slopes.
-      const drift = time.mul(slope.mul(SPEED_ON_SLOPE).add(SPEED_IN_POOLS));
+      // How fast the water runs here (metres a second): a slow glide in the pools, quicker down the slopes.
+      const speed = slope.mul(SPEED_ON_SLOPE).add(SPEED_IN_POOLS);
+      // Two copies of every pattern, half a cycle apart, each carried downstream for one cycle and
+      // then sent back; the copy being sent back is always the one faded out.
+      const phaseA = fract(time.div(FLOW_CYCLE));
+      const phaseB = fract(time.div(FLOW_CYCLE).add(0.5));
+      const blend = phaseA.mul(2).sub(1).abs();
+      const shiftA = speed.mul(phaseA.sub(0.5)).mul(FLOW_CYCLE);
+      const shiftB = speed.mul(phaseB.sub(0.5)).mul(FLOW_CYCLE);
+      /** The noise in the ribbon's own space (x across, y downstream), carried downstream at `rate` times the water's speed. */
+      const carried = (scale: THREE.Node<'vec2'>, rate: number) => {
+        const a = texture(tex.noise, fuv.mul(scale).sub(vec2(0, shiftA.mul(scale.y).mul(rate))));
+        const b = texture(tex.noise, fuv.mul(scale).sub(vec2(0, shiftB.mul(scale.y).mul(rate))).add(vec2(0.37, 0.61)));
+        return mix(a, b, blend);
+      };
 
       // Depth of water here, from the baked ground height.
       const depthAt = (xz: THREE.Node<'vec2'>) => max(positionWorld.y.sub(texture(tex.height, terrainUv(t, xz)).r), 0);
       const depth = depthAt(positionWorld.xz);
 
       // Ripples: a slow broad swell and finer wavelets, both carried downstream, the wavelets
-      // faster and sliding a little sideways so the two never move as one. They only tilt the
-      // surface a few degrees: enough to stir what is seen through it and in it, not to chop it up.
-      const swell = texture(tex.noise, fuv.mul(vec2(0.17, 0.11)).sub(vec2(0, drift.mul(0.11)))).rg.sub(0.5);
-      const wavelets = texture(tex.noise, fuv.mul(vec2(0.47, 0.3)).add(vec2(time.mul(0.013), drift.mul(-0.36)))).ba.sub(0.5);
+      // a little faster so the two never move as one. They only tilt the surface a few degrees:
+      // enough to stir what is seen through it and in it, not to chop it up.
+      const swell = carried(vec2(0.17, 0.11), 1).rg.sub(0.5);
+      const wavelets = carried(vec2(0.47, 0.3), 1.2).ba.sub(0.5);
       const rip = swell.mul(0.3).add(wavelets.mul(0.18)).mul(slope.mul(12).add(1));
       // Ripples are in "across/along" space; turn them to face the way the water flows.
       const across = vec2(dir.y.negate(), dir.x);
@@ -147,8 +168,15 @@ export class CreekWater {
       // Water takes the red out of the light first, so the deepest part of the channel is faintly green-blue.
       const tinted = wet.mul(vec3(ABSORB_RED, ABSORB_GREEN, ABSORB_BLUE).mul(throughWater).negate().exp());
       // Light gathered by the ripples plays over the bed: a soft bright net that drifts and shifts.
-      const net1 = texture(tex.noise, bedXz.mul(0.46).sub(dir.mul(drift.mul(0.36))).add(vec2(time.mul(0.02), 0))).g;
-      const net2 = texture(tex.noise, bedXz.mul(0.53).sub(dir.mul(drift.mul(0.48))).add(vec2(0.37, time.mul(-0.03)))).g;
+      // (Two layers at different scales and speeds, both carried downstream.)
+      const netAt = (k: number, rate: number, seed: number) =>
+        mix(
+          texture(tex.noise, bedXz.mul(k).sub(dir.mul(shiftA.mul(k * rate))).add(seed)).g,
+          texture(tex.noise, bedXz.mul(k).sub(dir.mul(shiftB.mul(k * rate))).add(seed + 0.43)).g,
+          blend,
+        );
+      const net1 = netAt(0.46, 0.8, 0);
+      const net2 = netAt(0.53, 0.9, 0.37);
       const net = pow(float(1).sub(saturate(net1.sub(net2).abs().mul(3.4))), 2.4);
       const bed = tinted.mul(net.mul(smoothstep(0.02, 0.2, depth)).mul(0.5).add(0.9));
 
@@ -162,14 +190,14 @@ export class CreekWater {
       const banks = mix(col('#48603a').mul(ambient), env.skyHorizon, 0.4);
       const mirrored = mix(banks, sky, smoothstep(-0.05, 0.55, refl.y));
       const toLight = saturate(dot(refl, env.lightDir));
-      const twinkle = smoothstep(0.5, 0.75, texture(tex.noise, fuv.mul(vec2(2.3, 1.6)).sub(vec2(0, drift.mul(1.5)))).b);
+      const twinkle = smoothstep(0.5, 0.75, carried(vec2(2.3, 1.6), 0.94).b);
       const glint = pow(toLight, 700).mul(5).mul(twinkle).add(pow(toLight, 90).mul(0.2));
       const shine = mirrored.mul(fres).add(env.lightColor.mul(glint));
 
       // A trace of foam: a thin broken line of it along the banks, and faint streaks where the bed is steep.
-      const lace = texture(tex.noise, fuv.mul(vec2(0.8, 0.5)).sub(vec2(0, drift.mul(0.3)))).a;
+      const lace = carried(vec2(0.8, 0.5), 0.6).a;
       const edge = float(1).sub(smoothstep(0.0, 0.03, depth)).mul(smoothstep(0.52, 0.74, lace)).mul(0.22);
-      const streaks = texture(tex.noise, fuv.mul(vec2(1.3, 0.16)).sub(vec2(0, drift.mul(0.3)))).r;
+      const streaks = carried(vec2(1.3, 0.16), 1.9).r;
       const riffle = smoothstep(0.035, 0.075, slope).mul(smoothstep(0.6, 0.8, streaks.add(wavelets.x.mul(0.5)))).mul(0.3);
       const foam = saturate(edge.add(riffle));
 

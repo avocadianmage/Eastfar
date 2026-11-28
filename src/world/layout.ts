@@ -31,7 +31,7 @@ export const FARMS = { x: 520, z: 30, halfX: 330, halfZ: 260, corner: 60 } as co
 /** Aleric's statue, tucked in a dell in the woods at the meadow's north-west edge. */
 export const STATUE = { x: -40, z: -386 } as const;
 /** How far the statue's dell reaches from the statue (metres): a pocket of walkable ground off the meadow. */
-export const STATUE_DELL = 13;
+export const STATUE_DELL = 15;
 /** The old gate where the East Road meets the forest. */
 export const EAST_GATE = { x: 852, z: 20 } as const;
 /** Where a new game begins: the village green, facing the road east. */

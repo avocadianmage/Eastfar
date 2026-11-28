@@ -77,6 +77,19 @@ test('bee swarms sting, can be broken up with bare hands, and count toward the q
   expect((await api<SwarmInfo[]>(page, 'return api.swarms();')).filter((s) => s.alive).length).toBe(4);
 });
 
+test('bees go home into their hives at night and do not come out', async ({ page }) => {
+  await boot(page, 'time=22:00');
+  const hives = await api<HiveInfo[]>(page, 'return api.hives();');
+  const h = hives[0]!;
+  const yaw = (Math.atan2(-h.dirX, h.dirZ) * 180) / Math.PI;
+  // Standing right under the first hive.
+  await api(page, `api.teleport(${h.x + h.dirX * 2}, ${h.z + h.dirZ * 2}, ${yaw}, 20);`);
+  await page.waitForFunction(() => (window as unknown as { __eastfar: { swarms(): { inside: boolean }[] } }).__eastfar.swarms().every((s) => s.inside), null, { timeout: 60_000 });
+  await frames(page, 60);
+  expect(await api<number>(page, 'return api.health();')).toBe(10);
+  expect((await api<{ inside: boolean; state: string }[]>(page, 'return api.swarms();')).every((s) => s.inside)).toBe(true);
+});
+
 test('fainting sends the player home to bed with nothing lost', async ({ page }) => {
   await boot(page, 'time=15:00');
   await api(page, 'api.give("apple", 2); api.teleport(40, -330, 0, 0);');

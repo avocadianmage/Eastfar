@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { beforeAll, describe, expect, it } from 'vitest';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { CREEK_POINTS, MEADOW, SPAWN, STATUE, VILLAGE, meadowSdf, playableSdf, regionAt } from '../../src/world/layout';
+import { CREEK_POINTS, MEADOW, SPAWN, STATUE, STATUE_DELL, VILLAGE, meadowSdf, playableSdf, regionAt } from '../../src/world/layout';
 import { Physics } from '../../src/world/physics';
 import { MASK_FLOWERS, MASK_GRASS, MASK_WET, WET_NO_FLOWERS, WET_NO_GRASS, bakeTerrain, heightAt, maskAt, waterDepthAt, type TerrainData } from '../../src/world/terrainData';
 
@@ -61,7 +61,7 @@ describe('terrain', () => {
     expect(ridge - inside).toBeGreaterThan(25);
   });
 
-  it('grows wildflowers in the meadow and nowhere else', () => {
+  it('grows wildflowers in the meadow (and the statue’s dell) and nowhere else', () => {
     let outside = 0;
     let inside = 0;
     let insideWithFlowers = 0;
@@ -71,7 +71,7 @@ describe('terrain', () => {
         const z = terrain.minZ + iz * terrain.cell;
         const flowers = terrain.masks[(iz * terrain.n + ix) * 4 + MASK_FLOWERS]! / 255;
         const m = meadowSdf(x, z);
-        if (m > 3 && flowers > 0) outside++;
+        if (m > 3 && Math.hypot(x - STATUE.x, z - STATUE.z) > STATUE_DELL + 5 && flowers > 0) outside++;
         if (m < -20) {
           inside++;
           if (flowers > 0.1) insideWithFlowers++;
@@ -80,6 +80,30 @@ describe('terrain', () => {
     }
     expect(outside).toBe(0);
     expect(insideWithFlowers / inside).toBeGreaterThan(0.4);
+  });
+
+  it('grows the wildflowers thicker the nearer they are to the statue, and carpets the dell', () => {
+    // Average flower cover in bands of distance from the statue, over the meadow and the dell.
+    const bands = [0, 0, 0, 0];
+    const counts = [0, 0, 0, 0];
+    const edges = [3, 12, 70, 130, 230];
+    for (let iz = 0; iz < terrain.n; iz++) {
+      for (let ix = 0; ix < terrain.n; ix++) {
+        const x = terrain.minX + ix * terrain.cell;
+        const z = terrain.minZ + iz * terrain.cell;
+        const d = Math.hypot(x - STATUE.x, z - STATUE.z);
+        if (d < edges[0]! || d > edges[4]!) continue;
+        if (d > 12 && meadowSdf(x, z) > -10) continue;
+        const k = edges.findIndex((e) => d < e) - 1;
+        const i = iz * terrain.n + ix;
+        bands[k]! += terrain.masks[i * 4 + MASK_FLOWERS]! / 255;
+        counts[k]!++;
+      }
+    }
+    const avg = bands.map((b, k) => b / counts[k]!);
+    expect(avg[0]).toBeGreaterThan(0.85);
+    expect(avg[1]).toBeGreaterThan(avg[2]!);
+    expect(avg[2]).toBeGreaterThan(avg[3]!);
   });
 
   it('keeps the meadow a glade about 200 metres across', () => {

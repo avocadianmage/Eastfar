@@ -514,7 +514,7 @@ export class Game {
         const n = this.npcs?.byId(id);
         return n ? { x: n.position.x, y: n.position.y, z: n.position.z, night: n.atNight, sitting: n.sitting, clip: n.figure.clip, time: n.figure.time, lod: n.figure.levelOfDetail, triangles: n.figure.triangles } : null;
       },
-      swarms: () => (this.bees?.swarms ?? []).map((b) => ({ x: b.position.x, y: b.position.y, z: b.position.z, alive: b.alive, health: b.health, state: b.state })),
+      swarms: () => (this.bees?.swarms ?? []).map((b) => ({ x: b.position.x, y: b.position.y, z: b.position.z, alive: b.alive, health: b.health, state: b.state, inside: b.inside })),
       caps: () => (this.caps?.spots ?? []).map((c, i) => ({ x: c.x, z: c.z, available: this.caps!.available(i, this.clock.day) })),
       /** Where each wild hive hangs (the top of the hive, under its bough) and which way its bough reaches. */
       hives: () => (this.bees?.hives ?? []).map((h) => ({ x: h.x, y: h.y, z: h.z, dirX: h.dirX, dirZ: h.dirZ, ground: heightAt(this.terrain, h.x, h.z) })),
