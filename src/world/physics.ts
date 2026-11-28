@@ -8,8 +8,12 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import type { TerrainData } from './terrainData';
 
 export const PLAYER_RADIUS = 0.32;
-export const PLAYER_HEIGHT = 1.75;
-export const PLAYER_EYE = 1.62;
+/**
+ * The player stands as tall as the grown villagers: eye to eye with them as they stand idle, at 1.40 m, the middle
+ * of the cast (Brenna is a little taller, Maelin and Wren a little shorter). Pip, a child, comes up to the chest.
+ */
+export const PLAYER_HEIGHT = 1.58;
+export const PLAYER_EYE = 1.4;
 
 let rapierReady: Promise<void> | null = null;
 

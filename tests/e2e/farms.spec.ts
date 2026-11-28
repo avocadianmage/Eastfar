@@ -41,7 +41,7 @@ async function fight(page: Page, kind: 'scarecrows' | 'crows'): Promise<void> {
     const w = window as unknown as { __fighting?: boolean };
     w.__fighting = true;
     a.hold('attack', true);
-    const eyeHeight = 1.62;
+    const eyeHeight = 1.4; // PLAYER_EYE
     const aim = () => {
       if (!w.__fighting) {
         a.hold('attack', false);
