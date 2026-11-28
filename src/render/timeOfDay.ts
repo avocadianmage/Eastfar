@@ -52,15 +52,15 @@ function hex(h: string): Rgb {
 const KEYS = [-18, -8, -2, 3, 10, 25, 58];
 
 const P = {
-  zenith: ['#040817', '#0a1230', '#26407c', '#3d6cbc', '#3a80d6', '#2f7de4', '#2a79e8'].map(hex),
-  horizon: ['#18294e', '#2c3862', '#d98860', '#f7bd80', '#e4dfcc', '#bedaf0', '#b4d6f4'].map(hex),
+  zenith: ['#02050f', '#060b20', '#26407c', '#3d6cbc', '#3a80d6', '#2f7de4', '#2a79e8'].map(hex),
+  horizon: ['#0d1730', '#1a2444', '#d98860', '#f7bd80', '#e4dfcc', '#bedaf0', '#b4d6f4'].map(hex),
   sun: ['#ff6a2a', '#ff6a2a', '#ff6f2e', '#ffa050', '#ffd49e', '#fff0d8', '#fff6e8'].map(hex),
   sunIntensity: [0, 0, 0.25, 1.35, 2.4, 3.0, 3.2],
   ambientSky: ['#27397a', '#2c3e7c', '#6f6c9c', '#a99cb6', '#b9c6e0', '#a9c9f2', '#a6c8f5'].map(hex),
-  ambientSkyIntensity: [0.72, 0.72, 0.78, 0.92, 1.0, 1.08, 1.1],
+  ambientSkyIntensity: [0.36, 0.4, 0.78, 0.92, 1.0, 1.08, 1.1],
   ambientGround: ['#17224a', '#1a2548', '#3a3040', '#5a4a3c', '#5c6040', '#566a3a', '#566a3a'].map(hex),
-  ambientGroundIntensity: [0.5, 0.5, 0.46, 0.52, 0.56, 0.62, 0.62],
-  fog: ['#1e2f55', '#2c3964', '#c98c72', '#eec392', '#dfe1d6', '#c6ddf0', '#bedaf3'].map(hex),
+  ambientGroundIntensity: [0.24, 0.28, 0.46, 0.52, 0.56, 0.62, 0.62],
+  fog: ['#101a33', '#1c2747', '#c98c72', '#eec392', '#dfe1d6', '#c6ddf0', '#bedaf3'].map(hex),
   haze: [0.00115, 0.00115, 0.0013, 0.0012, 0.0008, 0.0005, 0.00042],
   mist: [0.013, 0.014, 0.0135, 0.0115, 0.005, 0.0013, 0.0009],
 };
@@ -68,7 +68,8 @@ const P = {
 /** Dawn is pinker and mistier than dusk. */
 const DAWN_TINT = hex('#f4a9a6');
 const MOON_COLOR = hex('#a9c2ff');
-const MOON_INTENSITY = 0.85;
+/** Night is moonlit but dark: dim enough that a lantern makes a real difference. */
+const MOON_INTENSITY = 0.42;
 
 function keyIndex(e: number): { i: number; t: number } {
   if (e <= KEYS[0]!) return { i: 0, t: 0 };

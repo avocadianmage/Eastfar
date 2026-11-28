@@ -4,7 +4,7 @@
  * colour the light and fog are, how the wind blows. Every material reads the
  * same values, which is what makes the scene hang together.
  */
-import { float, length, saturate, uniform, vec3 } from 'three/tsl';
+import { float, length, saturate, sqrt, uniform, vec3 } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
 export const env = {
@@ -51,8 +51,11 @@ export const env = {
   lantern: uniform(0),
 };
 
-/** How far the lantern's light reaches, metres. */
-const LANTERN_REACH = 11;
+/** How far the lantern's light reaches (metres), and how strong it is before LANTERN_PEAK softens it. */
+const LANTERN_REACH = 16;
+const LANTERN_STRENGTH = 2.2;
+/** The most it adds: close to the flame it levels off here rather than blowing out the hand that carries it. */
+const LANTERN_PEAK = 1.45;
 
 /**
  * Warm light from the lantern at the player's belt, as a colour to multiply a
@@ -61,5 +64,8 @@ const LANTERN_REACH = 11;
 export function lanternLight(worldPos: THREE.Node<'vec3'>) {
   const d = length(worldPos.sub(env.playerPos.add(vec3(0, 1.1, 0))));
   const reach = saturate(float(1).sub(d.div(LANTERN_REACH)));
-  return vec3(1.0, 0.72, 0.38).mul(reach.mul(reach)).mul(env.lantern).mul(1.5);
+  const raw = reach.mul(reach).mul(LANTERN_STRENGTH);
+  // A soft ceiling: the light is unchanged where it is faint and eases towards LANTERN_PEAK where it is strong.
+  const q = raw.div(LANTERN_PEAK).mul(raw.div(LANTERN_PEAK));
+  return vec3(1.0, 0.72, 0.38).mul(raw.div(sqrt(sqrt(q.mul(q).add(1))))).mul(env.lantern);
 }
