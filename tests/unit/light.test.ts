@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import { DynamicResolution } from '../../src/render/dynamicResolution';
+import { moonSurface } from '../../src/render/moonSurface';
 import { SUNRISE, SUNSET, moonAt, sunAt, timeOfDay } from '../../src/render/timeOfDay';
 
 describe('time of day', () => {
@@ -56,6 +57,36 @@ describe('time of day', () => {
       const t = timeOfDay(h);
       if (Math.max(...t.lightColor) > 0.01) expect(t.lightDir[1]).toBeGreaterThan(-0.06);
     }
+  });
+});
+
+describe('the moon', () => {
+  const size = 128;
+  const face = moonSurface(size);
+  // Mean brightness (0..255) of the few pixels round a point given by latitude and longitude.
+  const at = (lat: number, lon: number): number => {
+    const r = Math.PI / 180;
+    const u = Math.cos(lat * r) * Math.sin(lon * r);
+    const v = Math.sin(lat * r);
+    const ci = Math.floor(((u + 1) / 2) * size);
+    const cj = Math.floor(((v + 1) / 2) * size);
+    let sum = 0;
+    let n = 0;
+    for (let j = cj - 2; j <= cj + 2; j++) for (let i = ci - 2; i <= ci + 2; i++) {
+      sum += face[(j * size + i) * 4]!;
+      n++;
+    }
+    return sum / n;
+  };
+
+  it('is painted the same every time', () => {
+    expect(moonSurface(size)).toEqual(face);
+  });
+
+  it('has dark seas where the real ones are, and bright highlands', () => {
+    const highlands = (at(-30, 15) + at(-55, -30) + at(-20, 70)) / 3;
+    for (const [lat, lon] of [[33, -16], [8, 31], [17, 59]]) expect(at(lat!, lon!)).toBeLessThan(highlands - 40);
+    expect(highlands).toBeGreaterThan(170);
   });
 });
 

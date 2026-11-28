@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { CREEK_POINTS, MEADOW, SPAWN, STATUE, STATUE_DELL, VILLAGE, meadowSdf, playableSdf, regionAt } from '../../src/world/layout';
 import { Physics } from '../../src/world/physics';
-import { MASK_FLOWERS, MASK_GRASS, MASK_WET, WET_NO_FLOWERS, WET_NO_GRASS, bakeTerrain, heightAt, maskAt, waterDepthAt, type TerrainData } from '../../src/world/terrainData';
+import { MASK_FLOWERS, MASK_GRASS, MASK_WET, WET_NO_FLOWERS, WET_NO_GRASS, bakeTerrain, heightAt, maskAt, meadowFloor, waterDepthAt, type TerrainData } from '../../src/world/terrainData';
 
 let terrain: TerrainData;
 let bakeMs = 0;
@@ -18,6 +18,17 @@ describe('terrain', () => {
   it('bakes quickly enough for a short initial load', () => {
     // A guard against something pathological, not a benchmark: build machines vary a lot.
     expect(bakeMs).toBeLessThan(20000);
+  });
+
+  it('lays the mist on the meadow floor, in a hollow below the village and the hills round it', () => {
+    const floor = meadowFloor(terrain);
+    expect(floor).toBeGreaterThan(heightAt(terrain, MEADOW.x, MEADOW.z) - 3);
+    expect(floor).toBeLessThan(heightAt(terrain, VILLAGE.x, VILLAGE.z));
+    for (let a = 0; a < 8; a++) {
+      const x = MEADOW.x + Math.cos((a * Math.PI) / 4) * (MEADOW.radius + 40);
+      const z = MEADOW.z + Math.sin((a * Math.PI) / 4) * (MEADOW.radius + 40);
+      if (playableSdf(x, z) > 0) expect(heightAt(terrain, x, z)).toBeGreaterThan(floor);
+    }
   });
 
   it('has finite heights everywhere', () => {

@@ -8,7 +8,7 @@ import { clamp, fbm2, lerp, smoothstep, valueNoise2 } from '../core/rng';
 import { BRIDGE, BUILDINGS, PATHS, footprintSdf } from './buildings';
 import { buildCreek, type CreekSample } from './creek';
 import { FIELDS, fieldSdf } from './fields';
-import { STATUE, STATUE_DELL, TERRAIN, VILLAGE, WORLD_SEED, approachSdf, eastOpening, farmsSdf, meadowSdf, playableSdf } from './layout';
+import { MEADOW, STATUE, STATUE_DELL, TERRAIN, VILLAGE, WORLD_SEED, approachSdf, eastOpening, farmsSdf, meadowSdf, playableSdf } from './layout';
 
 export const MASK_GRASS = 0;
 export const MASK_DIRT = 1;
@@ -495,6 +495,18 @@ export function heightAt(t: TerrainData, x: number, z: number): number {
   const c = h[i + t.n]!;
   const d = h[i + t.n + 1]!;
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+
+/** The height of the meadow's floor, where its mist lies: the lower parts of the ground inside it. */
+export function meadowFloor(t: TerrainData): number {
+  const heights: number[] = [];
+  for (let z = MEADOW.z - MEADOW.radius; z <= MEADOW.z + MEADOW.radius; z += 8) {
+    for (let x = MEADOW.x - MEADOW.radius; x <= MEADOW.x + MEADOW.radius; x += 8) {
+      if (meadowSdf(x, z) < 0) heights.push(heightAt(t, x, z));
+    }
+  }
+  heights.sort((a, b) => a - b);
+  return heights[Math.floor(heights.length * 0.2)]!;
 }
 
 /** Nearest-sample lookup of one mask channel, as 0..1. */

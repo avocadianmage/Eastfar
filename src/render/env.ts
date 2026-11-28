@@ -31,7 +31,7 @@ export const env = {
   fogLightColor: uniform(new THREE.Color(1, 0.9, 0.7)),
   /** Thin haze everywhere, per metre. */
   hazeDensity: uniform(0.0006),
-  /** Ground-hugging mist: density at mistBase, thinning with height. */
+  /** The meadow's ground mist: density at mistBase (its floor), thinning with height. */
   mistDensity: uniform(0.004),
   mistFalloff: uniform(0.09),
   mistBase: uniform(18),

@@ -190,7 +190,9 @@ tests/           unit/ and e2e/
 - **Trees:** procedural trunks with painterly leaf clusters; distant trees drawn as flat impostors.
 - **Creek:** a ribbon mesh along a spline: clear water showing its stony bed (refracted through gentle ripples carried downstream), a play of light over the bed, a trace of foam, and sky/moon glints.
 - **Sky and light:** procedural sky with sun and moon arcs, stars and cloud layers; one shadow-casting light with cascaded shadows near the player; colour grading keyed to time of day.
-- **Mist and moon:** height fog that pools in low ground, brightening toward the moon; bloom for moon glow and fireflies.
+- **Mist and moon:** a thin haze everywhere for distance, and ground mist only in the meadow; bloom for moon glow and fireflies. (Decided 27 November 2026, when the owner found the whole world too foggy and the moon blurry:)
+  - *Mist lies in the meadow only.* It used to hang round the player wherever they went. Now it fills the meadow's hollow: full within 65 m of its middle, thinning to nothing 130 m out (a little past the rim and into the statue's dell), and thinning with height above the meadow floor (`meadowFloor` in `src/world/terrainData.ts`, the lower fifth of the ground inside the meadow). The fog shader (`buildFogNode` in `src/render/sky.ts`) finds the stretch of each view ray that crosses that round and adds up the mist along it in six pieces, exactly for height, so from the village or the lanes the meadow shows as mist in the distance and everywhere else stays clear. It is thickest at night and dawn and a soft veil at noon; after dark it gathers a little moonlight so it reads as pale mist rather than darkness. The haze everywhere was roughly halved.
+  - *A crisp moon.* The moon was a white disc blurred by a wide glow and bloom. Now it is a sharp, antialiased disc a little larger than before (2.6° across the radius, about ten times the real moon), its face painted at start-up in code (`src/render/moonSurface.ts`): the seas where the real ones lie, a few hundred craters (the big old ones faint, the small young ones bright), and the bright rays of Tycho, Copernicus, Kepler and Aristarchus, darkening slightly toward the rim. It is bright enough to glow but not so bright that tone mapping washes out the seas, with a thin ring of light at its edge, a soft glow round it, and thin cloud near it lit silver. Stars no longer show through it.
 - **Scaling:** Low/Medium/High/Ultra presets with auto-detect, plus dynamic resolution that drops render scale to hold the budget.
 - **Cohesion:** a shared painterly material and palette applied to all CC0 models so mixed packs look like one world.
 
@@ -199,7 +201,7 @@ tests/           unit/ and e2e/
 - **Built from a kit in code.** Free building packs are mostly hollow shells, so each building is assembled from modular pieces (walls, floors, roofs, beams, doors, windows, stairs) following a floor plan in `data/buildings.ts`. CC0 packs supply the furniture and props.
 - **Real doors and windows.** Doors swing open with E and are solid when shut. Windows are see-through, so you see the meadow from inside and the hearth from outside.
 - **Interior lighting.** Roofs cast real shadows. Each building has an interior volume that fades out outdoor fog and ambient light as you step in; warm light comes from hearths, candles and lanterns (a few cheap local lights, no extra shadows).
-- **Night mood.** Lit windows glow through the mist from outside.
+- **Night mood.** Lit windows glow in the dark from outside; the meadow fills with moonlit mist.
 - **Keeping it fast.** Furniture and interior lights are only drawn when you are near or inside; grass and plants are masked out of building footprints.
 - **Layouts.** Mostly single-storey; the inn has an upper floor by staircase and barns have lofts.
 
